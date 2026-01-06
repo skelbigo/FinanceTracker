@@ -1,27 +1,45 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financetracker-api
+    env_file: .env
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
-    container_name: financetracker_postgres
+    container_name: financetracker-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: financetracker
+      POSTGRES_USER: ${DB_USER:?DB_USER required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME required}
+      DB_HOST: postgres
+      DB_URL: postgres://postgres:postgres@postgres:5432/financetracker?sslmode=disable
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d financetracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: financetracker-redis
     ports:
-      - "6379:6379"
-    profiles: ["optional"]
+      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
 
 volumes:
   pgdata:
