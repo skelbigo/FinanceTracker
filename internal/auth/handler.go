@@ -9,10 +9,11 @@ import (
 
 type Handler struct {
 	svc *Service
+	mw  gin.HandlerFunc
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, authMV gin.HandlerFunc) *Handler {
+	return &Handler{svc: svc, mw: authMV}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
@@ -21,6 +22,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g.POST("/login", h.login)
 	g.POST("/refresh", h.refresh)
 	g.POST("/logout", h.logout)
+	g.GET("/me", h.mw, h.me)
 }
 
 func (h *Handler) register(c *gin.Context) {
@@ -97,4 +99,29 @@ func (h *Handler) logout(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) me(c *gin.Context) {
+	v, ok := c.Get(CtxUserIDKey)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+		return
+	}
+	userID, ok := v.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+		return
+	}
+
+	dto, err := h.svc.Me(c.Request.Context(), userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user": dto})
 }

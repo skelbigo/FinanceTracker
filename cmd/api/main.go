@@ -97,7 +97,8 @@ func serve() {
 
 	authRepo := auth.NewRepo(pool)
 	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
-	authH := auth.NewHandler(authSvc)
+	authMW := auth.AuthRequired(jwtMgr)
+	authH := auth.NewHandler(authSvc, authMW)
 
 	authH.RegisterRoutes(r)
 

@@ -188,3 +188,16 @@ func (s *Service) Logout(ctx context.Context, req LogoutRequest) error {
 	_, err := s.repo.RevokeRefreshTokenByHash(ctx, hash)
 	return err
 }
+
+func (s *Service) Me(ctx context.Context, userID string) (UserDTO, error) {
+	u, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return UserDTO{}, err
+	}
+
+	dto := UserDTO{ID: u.ID, Email: u.Email}
+	if u.Name != nil {
+		dto.Name = *u.Name
+	}
+	return dto, nil
+}

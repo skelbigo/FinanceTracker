@@ -109,3 +109,17 @@ AND revoked_at IS NULL
 	}
 	return ct.RowsAffected() > 0, nil
 }
+
+func (r *Repo) GetUserByID(ctx context.Context, userID string) (User, error) {
+	const q = `
+SELECT id::text, email, password_hash, name, created_at
+FROM users
+WHERE id = $1::uuid
+`
+	var u User
+	err := r.db.QueryRow(ctx, q, userID).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.CreatedAt)
+	if err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
