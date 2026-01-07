@@ -12,6 +12,7 @@ type JWT interface {
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
+var ErrInvalidRefreshToken = errors.New("invalid refresh token")
 
 type Service struct {
 	repo       *Repo
@@ -125,5 +126,53 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 		AccessToken:  access,
 		RefreshToken: refreshPlain,
 		User:         dto,
+	}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResponse, error) {
+	plain := strings.TrimSpace(req.RefreshToken)
+	if plain == "" {
+		return RefreshResponse{}, errors.New("refresh token is required")
+	}
+
+	hash := HashRefreshToken(plain)
+
+	row, err := s.repo.GetRefreshTokenByHash(ctx, hash)
+	if err != nil {
+		return RefreshResponse{}, err
+	}
+
+	if row.RevokedAt != nil {
+		return RefreshResponse{}, ErrInvalidRefreshToken
+	}
+
+	if time.Now().After(row.ExpiresAt) {
+		return RefreshResponse{}, ErrInvalidRefreshToken
+	}
+
+	if err := s.repo.RevokeRefreshTokenByID(ctx, row.ID); err != nil {
+		return RefreshResponse{}, err
+	}
+
+	access, err := s.jwt.GenerateAccessToken(row.UserID, "")
+	if err != nil {
+		return RefreshResponse{}, err
+	}
+
+	newPlain, err := GenerateRefreshToken()
+	if err != nil {
+		return RefreshResponse{}, err
+	}
+
+	newHash := HashRefreshToken(newPlain)
+	newExpires := time.Now().Add(s.refreshTTL)
+
+	if err := s.repo.InsertRefreshTokenTime(ctx, row.UserID, newHash, newExpires); err != nil {
+		return RefreshResponse{}, err
+	}
+
+	return RefreshResponse{
+		AccessToken:  access,
+		RefreshToken: newPlain,
 	}, nil
 }

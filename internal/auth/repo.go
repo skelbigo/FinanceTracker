@@ -36,10 +36,6 @@ RETURNING id::text, email, password_hash, name, created_at
 	return u, nil
 }
 
-func (r *Repo) InsertRefreshToken(ctx context.Context, userID, tokenHash string, expiresAT string) error {
-	return errors.New("use InsertRefreshTokenTime instead")
-}
-
 func (r *Repo) InsertRefreshTokenTime(ctx context.Context, userID, tokenHash string, expiresAt interface{}) error {
 	const q = `
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at)
@@ -69,8 +65,33 @@ UPDATE refresh_tokens
 SET revoked_at = NOW()
 WHERE user_id = $1::uuid
 AND revoked_at IS NULL
-AND expires_at <= NOW
+AND expires_at <= NOW()
 `
 	_, err := r.db.Exec(ctx, q, userID)
+	return err
+}
+
+func (r Repo) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshTokenRow, error) {
+	const q = `
+SELECT id::uuid, user_id::text, expires_at, revoked_at
+FROM refresh_tokens
+WHERE token_hash = $1
+`
+	var row RefreshTokenRow
+	err := r.db.QueryRow(ctx, q, tokenHash).Scan(&row.ID, &row.UserID, &row.ExpiresAt, &row.RevokedAt)
+	if err != nil {
+		return RefreshTokenRow{}, err
+	}
+	return row, nil
+}
+
+func (r *Repo) RevokeRefreshTokenByID(ctx context.Context, id string) error {
+	const q = `
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE id = $1::uuid
+AND revoked_at IS NULL
+`
+	_, err := r.db.Exec(ctx, q, id)
 	return err
 }
