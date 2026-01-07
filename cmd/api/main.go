@@ -19,9 +19,6 @@ import (
 func main() {
 	_ = godotenv.Load()
 
-	// usage:
-	//   go run ./cmd/api serve
-	//   go run ./cmd/api migrate up|down|version
 	mode := "serve"
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
@@ -72,6 +69,12 @@ func serve() {
 	if err != nil {
 		log.Fatalf("invalid environment: %v", err)
 	}
+
+	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
+	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
+
+	_ = accessTTL
+	_ = refreshTTL
 
 	dbCfg := db.DBConfig{
 		Host:     cfg.DBHost,

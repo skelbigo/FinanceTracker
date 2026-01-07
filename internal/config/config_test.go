@@ -15,6 +15,8 @@ func unsetConfigEnv(t *testing.T) {
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE",
 		"REDIS_HOST", "REDIS_PORT",
 		"JWT_SECRET",
+		"JWT_ACCESS_TTL_MINUTES",
+		"REFRESH_TTL_DAYS",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")
@@ -105,5 +107,11 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	}
 	if cfg.DBSSLMode != "prefer" {
 		t.Fatalf("expected default DBSSLMode=prefer, got %q", cfg.DBSSLMode)
+	}
+	if cfg.JWTAccessTTLMinutes != 15 {
+		t.Fatalf("expected default JWTAccessTTLMinutes=15, got %d", cfg.JWTAccessTTLMinutes)
+	}
+	if cfg.RefreshTTLDays != 30 {
+		t.Fatalf("expected default RefreshTTLDays=30, got %d", cfg.RefreshTTLDays)
 	}
 }

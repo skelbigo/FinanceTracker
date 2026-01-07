@@ -23,7 +23,9 @@ type Config struct {
 	RedisHost string
 	RedisPort int
 
-	JWTSecret string
+	JWTSecret           string
+	JWTAccessTTLMinutes int
+	RefreshTTLDays      int
 }
 
 func Load() (Config, error) {
@@ -55,6 +57,16 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("missing required env: JWT_SECRET"))
 	}
 	cfg.JWTSecret = jwt
+
+	cfg.JWTAccessTTLMinutes = mustInt(getDefault("JWT_ACCESS_TTL_MINUTES", "15"), "JWT_ACCESS_TTL_MINUTES", &errs)
+	cfg.RefreshTTLDays = mustInt(getDefault("REFRESH_TTL_DAYS", "30"), "REFRESH_TTL_DAYS", &errs)
+
+	if cfg.JWTAccessTTLMinutes <= 0 || cfg.JWTAccessTTLMinutes > 24*60 {
+		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES out of range: %d", cfg.JWTAccessTTLMinutes))
+	}
+	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
+		errs = append(errs, fmt.Errorf("REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
+	}
 
 	if cfg.DBPort <= 0 || cfg.DBPort > 65535 {
 		errs = append(errs, fmt.Errorf("DB_PORT out of range: %d", cfg.DBPort))
