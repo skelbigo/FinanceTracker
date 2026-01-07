@@ -48,3 +48,29 @@ VALUES ($1::uuid, $2, $3, NULL)
 	_, err := r.db.Exec(ctx, q, userID, tokenHash, expiresAt)
 	return err
 }
+
+func (r *Repo) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	const q = `
+SELECT id::uuid, email, password_hash, name, created_at
+FROM users
+WHERE email = $1
+`
+	var u User
+	err := r.db.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.CreatedAt)
+	if err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
+
+func (r *Repo) RevokeExpiredRefreshTokens(ctx context.Context, userID string) error {
+	const q = `
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE user_id = $1::uuid
+AND revoked_at IS NULL
+AND expires_at <= NOW
+`
+	_, err := r.db.Exec(ctx, q, userID)
+	return err
+}
