@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
+	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/config"
 	"github.com/skelbigo/FinanceTracker/internal/db"
 	"github.com/skelbigo/FinanceTracker/internal/migrator"
@@ -70,12 +71,6 @@ func serve() {
 		log.Fatalf("invalid environment: %v", err)
 	}
 
-	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
-	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
-
-	_ = accessTTL
-	_ = refreshTTL
-
 	dbCfg := db.DBConfig{
 		Host:     cfg.DBHost,
 		Port:     cfg.DBPort,
@@ -94,6 +89,17 @@ func serve() {
 	defer pool.Close()
 
 	r := gin.Default()
+
+	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
+	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
+
+	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
+
+	authRepo := auth.NewRepo(pool)
+	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
+	authH := auth.NewHandler(authSvc)
+
+	authH.RegisterRoutes(r)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
