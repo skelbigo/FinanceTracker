@@ -20,6 +20,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g.POST("/register", h.register)
 	g.POST("/login", h.login)
 	g.POST("/refresh", h.refresh)
+	g.POST("/logout", h.logout)
 }
 
 func (h *Handler) register(c *gin.Context) {
@@ -81,4 +82,19 @@ func (h *Handler) refresh(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) logout(c *gin.Context) {
+	var req LogoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid json"})
+		return
+	}
+
+	if err := h.svc.Logout(c.Request.Context(), req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

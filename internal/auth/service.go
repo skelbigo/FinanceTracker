@@ -176,3 +176,15 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 		RefreshToken: newPlain,
 	}, nil
 }
+
+func (s *Service) Logout(ctx context.Context, req LogoutRequest) error {
+	plain := strings.TrimSpace(req.RefreshToken)
+	if plain == "" {
+		return errors.New("refresh token is required")
+	}
+
+	hash := HashRefreshToken(plain)
+
+	_, err := s.repo.RevokeRefreshTokenByHash(ctx, hash)
+	return err
+}

@@ -59,3 +59,7 @@ type RefreshTokenRow struct {
 	ExpiresAt time.Time
 	RevokedAt *time.Time
 }
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}

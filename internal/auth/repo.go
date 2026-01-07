@@ -95,3 +95,17 @@ AND revoked_at IS NULL
 	_, err := r.db.Exec(ctx, q, id)
 	return err
 }
+
+func (r *Repo) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (bool, error) {
+	const q = `
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE token_hash = $1
+AND revoked_at IS NULL
+`
+	ct, err := r.db.Exec(ctx, q, tokenHash)
+	if err != nil {
+		return false, err
+	}
+	return ct.RowsAffected() > 0, nil
+}
