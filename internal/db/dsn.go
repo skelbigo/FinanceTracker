@@ -14,17 +14,6 @@ type DBConfig struct {
 	SSLMode  string
 }
 
-func MaskedDSN(c DBConfig) string {
-	return fmt.Sprintf(
-		"host=%s port=%d user=%s dbname=%s sslmode=%s",
-		c.Host,
-		c.Port,
-		c.User,
-		c.Name,
-		c.SSLMode,
-	)
-}
-
 func BuildPostgresDSN(c DBConfig) string {
 	parts := []string{
 		fmt.Sprintf("host=%s", c.Host),

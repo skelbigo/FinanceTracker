@@ -2,34 +2,70 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewPostgresPool(ctx context.Context, c DBConfig) (*pgxpool.Pool, error) {
-	dsn := BuildPostgresDSN(c)
+type PoolConfig struct {
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	PingTimeout     time.Duration
+}
 
-	cfg, err := pgxpool.ParseConfig(dsn)
+func DefaultPoolConfig() PoolConfig {
+	return PoolConfig{
+		MaxConns:        10,
+		MinConns:        1,
+		MaxConnLifetime: time.Hour,
+		PingTimeout:     3 * time.Second,
+	}
+}
+
+func NewPostgresPool(ctx context.Context, dbc DBConfig) (*pgxpool.Pool, error) {
+	return NewPostgresPoolWithConfig(ctx, dbc, DefaultPoolConfig())
+}
+
+func NewPostgresPoolWithConfig(ctx context.Context, dbc DBConfig, pc PoolConfig) (*pgxpool.Pool, error) {
+	connStr := BuildPostgresURL(dbc) // (після 3-го пункту — один формат)
+
+	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.MaxConns = 10
-	cfg.MinConns = 1
-	cfg.MaxConnLifetime = time.Hour
+	cfg.MaxConns = pc.MaxConns
+	cfg.MinConns = pc.MinConns
+	cfg.MaxConnLifetime = pc.MaxConnLifetime
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	ctxPing, cancel := context.WithTimeout(ctx, 3*time.Second)
+	pingCtx, cancel := context.WithTimeout(context.Background(), pc.PingTimeout)
 	defer cancel()
-	if err := pool.Ping(ctxPing); err != nil {
+
+	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
 		return nil, err
 	}
 
 	return pool, nil
+}
+
+func MaskedURL(c DBConfig) string {
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.User, "******"),
+		Host:   fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Path:   c.Name,
+	}
+	q := u.Query()
+	q.Set("sslmode", c.SSLMode)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

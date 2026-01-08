@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,53 +19,13 @@ import (
 )
 
 func main() {
+	startedAt := time.Now()
 	_ = godotenv.Load()
 
-	mode := "serve"
-	if len(os.Args) > 1 {
-		mode = os.Args[1]
-	}
-
-	switch mode {
-	case "migrate":
-		cmd := "up"
-		if len(os.Args) > 2 {
-			cmd = os.Args[2]
-		}
-
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("invalid environment: %v", err)
-		}
-
-		dbURL := cfg.DBURL
-		if dbURL == "" {
-			dbCfg := db.DBConfig{
-				Host:     cfg.DBHost,
-				Port:     cfg.DBPort,
-				User:     cfg.DBUser,
-				Password: cfg.DBPassword,
-				Name:     cfg.DBName,
-				SSLMode:  cfg.DBSSLMode,
-			}
-			dbURL = db.BuildPostgresURL(dbCfg)
-		}
-
-		if err := migrator.Run("migrations", dbURL, cmd); err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("migrations done:", cmd)
-
-	case "serve":
-		serve()
-
-	default:
-		log.Fatalf("unknown mode: %s (use: serve|migrate)", mode)
-	}
-}
-
-func serve() {
-	ctx := context.Background()
+	mode := flag.String("mode", "serve", "run mode: serve|migrate")
+	cmd := flag.String("cmd", "up", "migrate command (used only with -mode=migrate): up|down|status|... (depends on migrator)")
+	migrationsDir := flag.String("migrations", "migrations", "path to migrations directory")
+	flag.Parse()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -80,30 +41,63 @@ func serve() {
 		SSLMode:  cfg.DBSSLMode,
 	}
 
-	log.Printf("connecting to postgres: %s", db.MaskedDSN(dbCfg))
+	switch *mode {
+	case "migrate":
+		dbURL := cfg.EffectiveDBURL()
 
-	pool, err := db.NewPostgresPool(ctx, dbCfg)
-	if err != nil {
-		log.Fatalf("db connection error: %v", err)
+		if err := migrator.Run(*migrationsDir, dbURL, *cmd); err != nil {
+			log.Fatalf("migrate cmd=%s dir=%s failed: %v", *cmd, *migrationsDir, err)
+		}
+		log.Printf("migrations done: cmd=%s dir=%s", *cmd, *migrationsDir)
+
+	case "serve":
+		serve(cfg, dbCfg, startedAt)
+
+	default:
+		flag.Usage()
+		log.Fatalf("unknown -mode=%q (use: serve|migrate)", *mode)
 	}
+}
+
+func serve(cfg config.Config, dbCfg db.DBConfig, startedAt time.Time) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pool := mustDB(ctx, dbCfg)
 	defer pool.Close()
 
+	r := setupRouter(cfg, pool, startedAt)
+
+	addr := fmt.Sprintf(":%d", cfg.AppPort)
+	log.Printf("Starting FinanceTracker API mode=%s addr=%s", gin.Mode(), addr)
+	if err := r.Run(addr); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func mustDB(ctx context.Context, dbCfg db.DBConfig) *pgxpool.Pool {
+	pool, err := db.NewPostgresPool(ctx, dbCfg)
+	if err != nil {
+		log.Fatalf("db connection error (%s): %v", db.MaskedURL(dbCfg), err)
+	}
+	return pool
+}
+
+func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gin.Engine {
 	r := gin.Default()
 
-	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
-	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
+	registerHealthRoutes(r, pool, startedAt)
+	registerAuthRoutes(r, cfg, pool)
 
-	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
+	return r
+}
 
-	authRepo := auth.NewRepo(pool)
-	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
-	authMW := auth.AuthRequired(jwtMgr)
-	authH := auth.NewHandler(authSvc, authMW)
-
-	authH.RegisterRoutes(r)
-
+func registerHealthRoutes(r *gin.Engine, pool *pgxpool.Pool, startedAt time.Time) {
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"uptime": time.Since(startedAt).String(),
+		})
 	})
 
 	r.GET("/ready", func(c *gin.Context) {
@@ -116,10 +110,18 @@ func serve() {
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ready", "db": "up"})
 	})
+}
 
-	addr := fmt.Sprintf(":%d", cfg.AppPort)
-	log.Printf("Starting FinanceTracker API on %s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatal(err)
-	}
+func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool) {
+	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
+	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
+
+	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
+
+	authRepo := auth.NewRepo(pool)
+	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
+	authMW := auth.AuthRequired(jwtMgr)
+	authH := auth.NewHandler(authSvc, authMW)
+
+	authH.RegisterRoutes(r)
 }

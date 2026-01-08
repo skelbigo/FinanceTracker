@@ -4,6 +4,8 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"log"
 	"net/http"
 )
 
@@ -28,18 +30,19 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 func (h *Handler) register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid json"})
+		httpx.BadRequest(c, "invalid json", nil)
 		return
 	}
 
 	resp, err := h.svc.Register(c.Request.Context(), req)
 	if err != nil {
 		if err == ErrEmailTaken {
-			c.JSON(http.StatusConflict, gin.H{"message": "email already exists"})
+			httpx.Conflict(c, "email already exists")
 			return
 		}
 
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		log.Println("context:", err)
+		httpx.Internal(c)
 		return
 	}
 
@@ -49,17 +52,18 @@ func (h *Handler) register(c *gin.Context) {
 func (h *Handler) login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid json"})
+		httpx.BadRequest(c, "invalid json", nil)
 		return
 	}
 
 	resp, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrInvalidCredentials) {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid credentials"})
+			httpx.Unauthorized(c, "invalid credentials")
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		log.Println("context:", err)
+		httpx.Internal(c)
 		return
 	}
 
@@ -69,17 +73,18 @@ func (h *Handler) login(c *gin.Context) {
 func (h *Handler) refresh(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid json"})
+		httpx.BadRequest(c, "invalid json", nil)
 		return
 	}
 
 	resp, err := h.svc.Refresh(c.Request.Context(), req)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrInvalidRefreshToken) {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid refresh token"})
+			httpx.Unauthorized(c, "invalid refresh token")
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		log.Println("context:", err)
+		httpx.Internal(c)
 		return
 	}
 
@@ -89,12 +94,13 @@ func (h *Handler) refresh(c *gin.Context) {
 func (h *Handler) logout(c *gin.Context) {
 	var req LogoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid json"})
+		httpx.BadRequest(c, "invalid json", nil)
 		return
 	}
 
 	if err := h.svc.Logout(c.Request.Context(), req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		log.Println("context:", err)
+		httpx.Internal(c)
 		return
 	}
 
@@ -119,7 +125,8 @@ func (h *Handler) me(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		log.Println("context:", err)
+		httpx.Internal(c)
 		return
 	}
 

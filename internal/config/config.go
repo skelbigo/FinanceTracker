@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/skelbigo/FinanceTracker/internal/db"
 )
 
 type Config struct {
@@ -20,8 +22,9 @@ type Config struct {
 
 	DBURL string
 
-	RedisHost string
-	RedisPort int
+	RedisEnabled bool
+	RedisHost    string
+	RedisPort    int
 
 	JWTSecret           string
 	JWTAccessTTLMinutes int
@@ -41,6 +44,7 @@ func Load() (Config, error) {
 	cfg.DBUser = mustString("DB_USER", &errs)
 	cfg.DBPassword = mustString("DB_PASSWORD", &errs)
 	cfg.DBName = mustString("DB_NAME", &errs)
+
 	cfg.DBSSLMode = getDefault("DB_SSLMODE", "prefer")
 	validateOneOf(
 		"DB_SSLMODE",
@@ -49,14 +53,25 @@ func Load() (Config, error) {
 		&errs,
 	)
 
-	cfg.RedisHost = getDefault("REDIS_HOST", "localhost")
-	cfg.RedisPort = mustInt(getDefault("REDIS_PORT", "6379"), "REDIS_PORT", &errs)
+	cfg.RedisEnabled = mustBool(getDefault("REDIS_ENABLED", ""), "REDIS_ENABLED", &errs)
 
-	jwt := os.Getenv("JWT_SECRET")
-	if strings.TrimSpace(jwt) == "" {
+	redisHostRaw := strings.TrimSpace(os.Getenv("REDIS_HOST"))
+	redisPortRaw := strings.TrimSpace(os.Getenv("REDIS_PORT"))
+
+	if cfg.RedisEnabled || redisHostRaw != "" || redisPortRaw != "" {
+		cfg.RedisEnabled = true
+		cfg.RedisHost = getDefault("REDIS_HOST", "localhost")
+		cfg.RedisPort = mustInt(getDefault("REDIS_PORT", "6379"), "REDIS_PORT", &errs)
+
+		if cfg.RedisPort <= 0 || cfg.RedisPort > 65535 {
+			errs = append(errs, fmt.Errorf("REDIS_PORT out of range: %d", cfg.RedisPort))
+		}
+	}
+
+	cfg.JWTSecret = strings.TrimSpace(os.Getenv("JWT_SECRET"))
+	if cfg.JWTSecret == "" {
 		errs = append(errs, fmt.Errorf("missing required env: JWT_SECRET"))
 	}
-	cfg.JWTSecret = jwt
 
 	cfg.JWTAccessTTLMinutes = mustInt(getDefault("JWT_ACCESS_TTL_MINUTES", "15"), "JWT_ACCESS_TTL_MINUTES", &errs)
 	cfg.RefreshTTLDays = mustInt(getDefault("REFRESH_TTL_DAYS", "30"), "REFRESH_TTL_DAYS", &errs)
@@ -67,7 +82,6 @@ func Load() (Config, error) {
 	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
 		errs = append(errs, fmt.Errorf("REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
 	}
-
 	if cfg.DBPort <= 0 || cfg.DBPort > 65535 {
 		errs = append(errs, fmt.Errorf("DB_PORT out of range: %d", cfg.DBPort))
 	}
@@ -76,7 +90,7 @@ func Load() (Config, error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{}, joinErrors(errs)
+		return Config{}, errors.Join(errs...)
 	}
 	return cfg, nil
 }
@@ -103,6 +117,22 @@ func mustInt(raw string, key string, errs *[]error) int {
 	return n
 }
 
+func mustBool(raw string, key string, errs *[]error) bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return false
+	}
+	switch raw {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		*errs = append(*errs, fmt.Errorf("invalid %s=%q (expected bool)", key, raw))
+		return false
+	}
+}
+
 func getDefault(key, def string) string {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
@@ -120,6 +150,18 @@ func validateOneOf(key, value string, allowed []string, errs *[]error) {
 	*errs = append(*errs, fmt.Errorf("%s must be one of %v, got %q", key, allowed, value))
 }
 
-func joinErrors(errs []error) error {
-	return errors.Join(errs...)
+func (c Config) EffectiveDBURL() string {
+	if strings.TrimSpace(c.DBURL) != "" {
+		return strings.TrimSpace(c.DBURL)
+	}
+
+	dbCfg := db.DBConfig{
+		Host:     c.DBHost,
+		Port:     c.DBPort,
+		User:     c.DBUser,
+		Password: c.DBPassword,
+		Name:     c.DBName,
+		SSLMode:  c.DBSSLMode,
+	}
+	return db.BuildPostgresURL(dbCfg)
 }
