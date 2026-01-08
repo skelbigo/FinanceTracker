@@ -8,7 +8,7 @@ import (
 )
 
 type JWT interface {
-	GenerateAccessToken(userID string, email string) (string, error)
+	GenerateAccessToken(userID string) (string, error)
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -51,7 +51,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 		return RegisterResponse{}, err
 	}
 
-	access, err := s.jwt.GenerateAccessToken(u.ID, u.Email)
+	access, err := s.jwt.GenerateAccessToken(u.ID)
 	if err != nil {
 		return RegisterResponse{}, err
 	}
@@ -63,19 +63,18 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	refreshHash := HashRefreshToken(refreshPlain)
 
 	expiresAt := time.Now().Add(s.refreshTTL)
-	if err := s.repo.InsertRefreshTokenTime(ctx, u.ID, refreshHash, expiresAt); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt); err != nil {
 		return RegisterResponse{}, err
 	}
 
-	dto := UserDTO{ID: u.ID, Email: u.Email}
-	if u.Name != nil {
-		dto.Name = *u.Name
-	}
+	dto := UserDTO{ID: u.ID, Email: u.Email, Name: u.Name}
 
 	return RegisterResponse{
-		AccessToken:  access,
-		RefreshToken: refreshPlain,
-		User:         dto,
+		TokenPair: TokenPair{
+			AccessToken:  access,
+			RefreshToken: refreshPlain,
+		},
+		User: dto,
 	}, nil
 }
 
@@ -101,7 +100,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 
 	_ = s.repo.RevokeExpiredRefreshTokens(ctx, u.ID)
 
-	access, err := s.jwt.GenerateAccessToken(u.ID, u.Email)
+	access, err := s.jwt.GenerateAccessToken(u.ID)
 	if err != nil {
 		return LoginResponse{}, err
 	}
@@ -113,19 +112,18 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 	refreshHash := HashRefreshToken(refreshPlain)
 	expiresAt := time.Now().Add(s.refreshTTL)
 
-	if err := s.repo.InsertRefreshTokenTime(ctx, u.ID, refreshHash, expiresAt); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt); err != nil {
 		return LoginResponse{}, err
 	}
 
-	dto := UserDTO{ID: u.ID, Email: u.Email}
-	if u.Name != nil {
-		dto.Name = *u.Name
-	}
+	dto := UserDTO{ID: u.ID, Email: u.Email, Name: u.Name}
 
 	return LoginResponse{
-		AccessToken:  access,
-		RefreshToken: refreshPlain,
-		User:         dto,
+		TokenPair: TokenPair{
+			AccessToken:  access,
+			RefreshToken: refreshPlain,
+		},
+		User: dto,
 	}, nil
 }
 
@@ -137,24 +135,15 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 
 	hash := HashRefreshToken(plain)
 
-	row, err := s.repo.GetRefreshTokenByHash(ctx, hash)
+	userID, ok, err := s.repo.ConsumeRefreshToken(ctx, hash)
 	if err != nil {
 		return RefreshResponse{}, err
 	}
-
-	if row.RevokedAt != nil {
+	if !ok {
 		return RefreshResponse{}, ErrInvalidRefreshToken
 	}
 
-	if time.Now().After(row.ExpiresAt) {
-		return RefreshResponse{}, ErrInvalidRefreshToken
-	}
-
-	if err := s.repo.RevokeRefreshTokenByID(ctx, row.ID); err != nil {
-		return RefreshResponse{}, err
-	}
-
-	access, err := s.jwt.GenerateAccessToken(row.UserID, "")
+	access, err := s.jwt.GenerateAccessToken(userID)
 	if err != nil {
 		return RefreshResponse{}, err
 	}
@@ -167,7 +156,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 	newHash := HashRefreshToken(newPlain)
 	newExpires := time.Now().Add(s.refreshTTL)
 
-	if err := s.repo.InsertRefreshTokenTime(ctx, row.UserID, newHash, newExpires); err != nil {
+	if err := s.repo.InsertRefreshToken(ctx, userID, newHash, newExpires); err != nil {
 		return RefreshResponse{}, err
 	}
 
@@ -185,7 +174,7 @@ func (s *Service) Logout(ctx context.Context, req LogoutRequest) error {
 
 	hash := HashRefreshToken(plain)
 
-	_, err := s.repo.RevokeRefreshTokenByHash(ctx, hash)
+	_, _, err := s.repo.ConsumeRefreshToken(ctx, hash)
 	return err
 }
 
@@ -195,9 +184,6 @@ func (s *Service) Me(ctx context.Context, userID string) (UserDTO, error) {
 		return UserDTO{}, err
 	}
 
-	dto := UserDTO{ID: u.ID, Email: u.Email}
-	if u.Name != nil {
-		dto.Name = *u.Name
-	}
+	dto := UserDTO{ID: u.ID, Email: u.Email, Name: u.Name}
 	return dto, nil
 }

@@ -1,10 +1,13 @@
 package auth
 
 import (
-	"fmt"
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"time"
 )
+
+var ErrInvalidToken = errors.New("invalid token")
+var ErrExpiredToken = errors.New("expired token")
 
 type JWTManager struct {
 	secret []byte
@@ -18,38 +21,34 @@ func NewJWTManager(secret string, accessTTL time.Duration) *JWTManager {
 	}
 }
 
-func (m *JWTManager) GenerateAccessToken(userID string, email string) (string, error) {
+func (m *JWTManager) GenerateAccessToken(userID string) (string, error) {
 	now := time.Now()
-
 	claims := jwt.RegisteredClaims{
 		Subject:   userID,
 		ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
 		IssuedAt:  jwt.NewNumericDate(now),
 	}
 
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t.SignedString(m.secret)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
 }
 
-func (m *JWTManager) ParseAndValidate(tokenStr string) (userID string, err error) {
+func (m *JWTManager) ParseAndValidate(tokenStr string) (string, error) {
 	var claims jwt.RegisteredClaims
 
-	token, err := jwt.ParseWithClaims(tokenStr, &claims, func(t *jwt.Token) (any, error) {
-		if t.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return m.secret, nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		&claims,
+		func(t *jwt.Token) (any, error) { return m.secret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
 	if err != nil {
-		return "", err
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return "", ErrExpiredToken
+		}
+		return "", ErrInvalidToken
 	}
-	if !token.Valid {
-		return "", fmt.Errorf("invalid token")
+	if !token.Valid || claims.Subject == "" {
+		return "", ErrInvalidToken
 	}
-
-	if claims.Subject == "" {
-		return "", fmt.Errorf("invalid token")
-	}
-
 	return claims.Subject, nil
 }

@@ -14,7 +14,6 @@ func Run(migrationsPath, dbURL, cmd string) error {
 		return fmt.Errorf("migrate init error: %w", err)
 	}
 	defer func() { _, _ = m.Close() }()
-
 	switch cmd {
 	case "up":
 		if err := m.Up(); err != nil && err != migrate.ErrNoChange {

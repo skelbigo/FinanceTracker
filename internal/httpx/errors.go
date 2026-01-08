@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 type ErrorResponse struct {
@@ -9,27 +10,29 @@ type ErrorResponse struct {
 	Details map[string]string `json:"details,omitempty"`
 }
 
-func BadRequest(c *gin.Context, message string, details map[string]string) {
-	c.JSON(400, ErrorResponse{
+func Error(c *gin.Context, status int, message string, details map[string]string) {
+	c.JSON(status, ErrorResponse{
 		Message: message,
 		Details: details,
 	})
 }
 
+func BadRequest(c *gin.Context, message string, details map[string]string) {
+	Error(c, http.StatusBadRequest, message, details)
+}
+
 func Unauthorized(c *gin.Context, message string) {
-	c.JSON(401, ErrorResponse{
-		Message: message,
-	})
+	Error(c, http.StatusUnauthorized, message, nil)
 }
 
 func Conflict(c *gin.Context, message string) {
-	c.JSON(409, ErrorResponse{
-		Message: message,
-	})
+	Error(c, http.StatusConflict, message, nil)
 }
 
 func Internal(c *gin.Context) {
-	c.JSON(500, ErrorResponse{
-		Message: "internal server error",
-	})
+	Error(c, http.StatusInternalServerError, "internal server error", nil)
+}
+
+func Unprocessable(c *gin.Context, message string, details map[string]string) {
+	Error(c, http.StatusUnprocessableEntity, message, details)
 }

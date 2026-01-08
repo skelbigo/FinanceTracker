@@ -3,8 +3,10 @@ package auth
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 var ErrEmailTaken = errors.New("email already taken")
@@ -29,14 +31,16 @@ RETURNING id::text, email, password_hash, name, created_at
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return User{}, ErrEmailTaken
+			if pgErr.ConstraintName == "users_email_key" {
+				return User{}, ErrEmailTaken
+			}
 		}
 		return User{}, err
 	}
 	return u, nil
 }
 
-func (r *Repo) InsertRefreshTokenTime(ctx context.Context, userID, tokenHash string, expiresAt interface{}) error {
+func (r *Repo) InsertRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
 	const q = `
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at)
 VALUES ($1::uuid, $2, $3, NULL)
@@ -47,7 +51,7 @@ VALUES ($1::uuid, $2, $3, NULL)
 
 func (r *Repo) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	const q = `
-SELECT id::uuid, email, password_hash, name, created_at
+SELECT id::text, email, password_hash, name, created_at
 FROM users
 WHERE email = $1
 `
@@ -71,43 +75,24 @@ AND expires_at <= NOW()
 	return err
 }
 
-func (r Repo) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshTokenRow, error) {
-	const q = `
-SELECT id::uuid, user_id::text, expires_at, revoked_at
-FROM refresh_tokens
-WHERE token_hash = $1
-`
-	var row RefreshTokenRow
-	err := r.db.QueryRow(ctx, q, tokenHash).Scan(&row.ID, &row.UserID, &row.ExpiresAt, &row.RevokedAt)
-	if err != nil {
-		return RefreshTokenRow{}, err
-	}
-	return row, nil
-}
-
-func (r *Repo) RevokeRefreshTokenByID(ctx context.Context, id string) error {
-	const q = `
-UPDATE refresh_tokens
-SET revoked_at = NOW()
-WHERE id = $1::uuid
-AND revoked_at IS NULL
-`
-	_, err := r.db.Exec(ctx, q, id)
-	return err
-}
-
-func (r *Repo) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) (bool, error) {
+func (r *Repo) ConsumeRefreshToken(ctx context.Context, tokenHash string) (string, bool, error) {
 	const q = `
 UPDATE refresh_tokens
 SET revoked_at = NOW()
 WHERE token_hash = $1
 AND revoked_at IS NULL
+AND expires_at > NOW()
+RETURNING user_id::text
 `
-	ct, err := r.db.Exec(ctx, q, tokenHash)
+	var userID string
+	err := r.db.QueryRow(ctx, q, tokenHash).Scan(&userID)
 	if err != nil {
-		return false, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
 	}
-	return ct.RowsAffected() > 0, nil
+	return userID, true, nil
 }
 
 func (r *Repo) GetUserByID(ctx context.Context, userID string) (User, error) {

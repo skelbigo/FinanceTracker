@@ -10,28 +10,29 @@ const CtxUserIDKey = "user_id"
 
 func AuthRequired(jwtm *JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		h := strings.TrimSpace(c.GetHeader("Authorization"))
-		if h == "" || !strings.HasPrefix(h, "Bearer ") {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "missing authorization header"})
-			c.Abort()
-			return
-		}
-
-		tokenStr := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
-		if tokenStr == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "missing token"})
-			c.Abort()
+		tokenStr, ok := bearerToken(c.GetHeader("Authorization"))
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid authorization"})
 			return
 		}
 
 		userID, err := jwtm.ParseAndValidate(tokenStr)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
-			c.Abort()
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
 			return
 		}
 
-		c.Set("user_id", userID)
+		c.Set(CtxUserIDKey, userID)
 		c.Next()
 	}
+}
+
+func bearerToken(h string) (string, bool) {
+	h = strings.TrimSpace(h)
+	parts := strings.SplitN(h, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return "", false
+	}
+	tok := strings.TrimSpace(parts[1])
+	return tok, tok != ""
 }
