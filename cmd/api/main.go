@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"log"
 	"net/http"
 	"time"
@@ -87,7 +88,12 @@ func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gi
 	r := gin.Default()
 
 	registerHealthRoutes(r, pool, startedAt)
-	registerAuthRoutes(r, cfg, pool)
+
+	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
+	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
+
+	registerAuthRoutes(r, cfg, pool, jwtMgr)
+	registerWorkspacesRouts(r, pool, jwtMgr)
 
 	return r
 }
@@ -112,11 +118,8 @@ func registerHealthRoutes(r *gin.Engine, pool *pgxpool.Pool, startedAt time.Time
 	})
 }
 
-func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool) {
-	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
+func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
 	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
-
-	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
 
 	authRepo := auth.NewRepo(pool)
 	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
@@ -124,4 +127,15 @@ func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool) {
 	authH := auth.NewHandler(authSvc, authMW)
 
 	authH.RegisterRoutes(r)
+}
+
+func registerWorkspacesRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
+	authMW := auth.AuthRequired(jwtMgr)
+
+	wsRepo := workspaces.NewRepo(pool)
+	wsH := workspaces.NewHandler(wsRepo)
+
+	g := r.Group("/workspaces")
+	g.Use(authMW)
+	g.POST("", wsH.CreateWorkspace)
 }
