@@ -24,3 +24,18 @@ type Member struct {
 	Role        Role      `json:"role"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+type WorkspaceListItem struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Role      Role      `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type MemberInfo struct {
+	UserID    string    `json:"user_id"`
+	Email     string    `json:"email"`
+	Name      *string   `json:"name,omitempty"`
+	Role      Role      `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}

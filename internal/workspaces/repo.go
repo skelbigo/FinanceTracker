@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"strings"
 )
@@ -16,6 +17,13 @@ type Repo struct {
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
+
+var (
+	ErrUserNotFound     = errors.New("user not found")
+	ErrAlreadyMember    = errors.New("already a member")
+	ErrLastOwner        = errors.New("cannot remove last owner")
+	ErrCannotSelfDemote = errors.New("owner cannot slf demote")
+)
 
 func (r *Repo) CreateWorkspaceWithOwner(ctx context.Context, createdBy, name, defaultCurrency string) (Workspace, error) {
 	name = strings.TrimSpace(name)
@@ -126,7 +134,7 @@ VALUES ($1::uuid, $2::uuid, $3)
 func (r *Repo) UpdateMemberRole(ctx context.Context, workspaceID, userID string, role Role) error {
 	const q = `
 UPDATE workspaces_members
-SET role $3
+SET role = $3
 WHERE workspace_id = $1::uuid
 AND user_id = $2::uuid
 `
@@ -142,8 +150,8 @@ AND user_id = $2::uuid
 
 func (r *Repo) RemoveMember(ctx context.Context, workspaceID, userID string) error {
 	const q = `
-DELETE FROM worspaces_members
-WHERE workspase_id = $1::uuid
+DELETE FROM workspaces_members
+WHERE workspace_id = $1::uuid
 AND user_id = $2::uuid
 `
 	ct, err := r.pool.Exec(ctx, q, workspaceID, userID)
@@ -156,31 +164,194 @@ AND user_id = $2::uuid
 	return nil
 }
 
-func (r *Repo) EnsureNotLastOwner(ctx context.Context, workspaceID, targetUserID string, newRole *Role, removing bool) error {
-	const qOwners = `
-SELECT count(*)
-FROM workspaces_members
-WHERE workspace_id = $1::uuid AND ROLE == 'owner'
+func (r *Repo) ListMyWorkspaces(ctx context.Context, userID string) ([]WorkspaceListItem, error) {
+	const q = `
+SELECT w.id::text, w.name, wm.role, w.created_at
+FROM workspaces w 
+JOIN workspaces_members wm ON wm.workspace_id = w.id
+WHERE wm.user_id = $1::uuid
+ORDER BY w.created_at DESC
 `
-	var owners int
-	if err := r.pool.QueryRow(ctx, qOwners, workspaceID).Scan(&owners); err != nil {
+	rows, err := r.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []WorkspaceListItem
+	for rows.Next() {
+		var it WorkspaceListItem
+		var role string
+		if err := rows.Scan(&it.ID, &it.Name, &role, &it.CreatedAt); err != nil {
+			return nil, err
+		}
+		it.Role = Role(role)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetWorkspaceWithRole(ctx context.Context, workspaceID, userID string) (Workspace, Role, error) {
+	const q = `
+SELECT w.id::text, w.name, w.default_currency, w.created_by::text, w.created_at, wm.role
+FROM workspaces w
+JOIN workspaces_members wm ON wm.workspace_id = w.id
+WHERE w.id = $1::uuid
+AND wm.user_id = $2::uuid
+`
+	var w Workspace
+	var role string
+	err := r.pool.QueryRow(ctx, q, workspaceID, userID).Scan(&w.ID, &w.Name, &w.DefaultCurrency, &w.CreatedBy, &w.CreatedAt, &role)
+	if err != nil {
+		return Workspace{}, "", err
+	}
+	return w, Role(role), nil
+}
+
+func (r *Repo) ListMembersInfo(ctx context.Context, workspaceID string) ([]MemberInfo, error) {
+	const q = `
+SELECT wm.user_id::text, u.email, u.name, wm.role, wm.created_at
+FROM workspaces_members wm
+JOIN users u on u.id = wm.user_id
+WHERE wm.workspace_id = $1::uuid
+ORDER BY wm.created_at ASC
+`
+	rows, err := r.pool.Query(ctx, q, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []MemberInfo
+	for rows.Next() {
+		var m MemberInfo
+		var role string
+		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &role, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		m.Role = Role(role)
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) FindUserIDByEmail(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	const q = `SELECT id::text FROM users WHERE email = $1`
+	var id string
+	err := r.pool.QueryRow(ctx, q, email).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrUserNotFound
+		}
+		return "", err
+	}
+	return id, nil
+}
+
+func (r *Repo) AddMemberByUserID(ctx context.Context, workspaceID, userID string, role Role) error {
+	const q = `
+INSERT INTO workspaces_members (workspace_id, user_id, role)
+VALUES ($1::uuid, $2::uuid, $3)
+`
+	_, err := r.pool.Exec(ctx, q, workspaceID, userID, string(role))
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrAlreadyMember
+		}
 		return err
 	}
-	if owners <= 1 {
-		const qIsOwner = `
-SELECT 1 FROM workspaces_members
-WHERE workspace_id = $1::uuid AND ROLE = 'owner'
-`
-		var one int
-		err := r.pool.QueryRow(ctx, qIsOwner, workspaceID, targetUserID).Scan(&one)
-		if err == nil {
-			if removing {
-				return fmt.Errorf("cannot remove last owner")
-			}
-			if newRole != nil && *newRole == RoleOwner {
-				return fmt.Errorf("cannot change role of last owner")
-			}
+	return nil
+}
+
+func (r *Repo) UpdateMemberRoleSafe(ctx context.Context, workspaceID, actorUserID, targetUserID string, newRole Role) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var current string
+	err = tx.QueryRow(ctx, `
+SELECT role FROM workspaces_members
+WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+`, workspaceID, targetUserID).Scan(&current)
+	if err != nil {
+		return err
+	}
+
+	if actorUserID == targetUserID && Role(current) == RoleOwner && newRole != RoleOwner {
+		return ErrCannotSelfDemote
+	}
+
+	if Role(current) == RoleOwner && newRole != RoleOwner {
+		var owners int
+		if err := tx.QueryRow(ctx, `
+SELECT count(*) FROM workspaces_members
+WHERE workspace_id = $1::uuid AND role = 'owner'
+`, workspaceID).Scan(&owners); err != nil {
+			return err
+		}
+		if owners <= 1 {
+			return ErrLastOwner
 		}
 	}
-	return nil
+
+	ct, err := tx.Exec(ctx, `
+UPDATE workspaces_members
+SET role = $3
+WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+`, workspaceID, targetUserID, string(newRole))
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *Repo) RemoveMemberSafe(ctx context.Context, workspaceID, actorUserID, targetUserID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var current string
+	err = tx.QueryRow(ctx, `
+SELECT role FROM workspaces_members
+WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+`, workspaceID, targetUserID).Scan(&current)
+	if err != nil {
+		return err
+	}
+
+	if Role(current) == RoleOwner {
+		var owners int
+		if err := tx.QueryRow(ctx, `
+SELECT count(*) FROM workspaces_members
+WHERE workspace_id = $1::uuid AND role = 'owner'
+`, workspaceID).Scan(&owners); err != nil {
+			return err
+		}
+		if owners <= 1 {
+			return ErrLastOwner
+		}
+	}
+
+	ct, err := tx.Exec(ctx, `
+DELETE FROM workspaces_members
+WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+`, workspaceID, targetUserID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+
+	return tx.Commit(ctx)
 }

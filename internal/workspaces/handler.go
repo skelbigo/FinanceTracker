@@ -45,22 +45,10 @@ func (h *Handler) CreateWorkspace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, w)
-}
-func (h *Handler) GetWorkspace(c *gin.Context) {
-	workspaceID := c.Param("id")
-
-	w, err := h.repo.GetWorkspace(c.Request.Context(), workspaceID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
-			return
-		}
-		httpx.Internal(c)
-		return
-	}
-
-	c.JSON(http.StatusOK, w)
+	c.JSON(http.StatusCreated, gin.H{
+		"workspace": w,
+		"role":      RoleOwner,
+	})
 }
 
 func (h *Handler) ListMembers(c *gin.Context) {
@@ -76,8 +64,8 @@ func (h *Handler) ListMembers(c *gin.Context) {
 }
 
 type addMemberReq struct {
-	UserID string `json:"user_id" binding:"required"`
-	Role   string `json:"role" binding:"required"`
+	Email string `json:"email" binding:"required, email"`
+	Role  string `json:"role" binding:"required"`
 }
 
 func (h *Handler) AddMember(c *gin.Context) {
@@ -89,17 +77,28 @@ func (h *Handler) AddMember(c *gin.Context) {
 		return
 	}
 
-	req.UserID = strings.TrimSpace(req.UserID)
-	req.Role = strings.TrimSpace(req.Role)
-
-	role := Role(req.Role)
+	role := Role(strings.TrimSpace(req.Role))
 	if role != RoleOwner && role != RoleMember && role != RoleViewer {
 		httpx.Unprocessable(c, "invalid role", map[string]string{"role": "role must be one of owner | member | viewer"})
 		return
 	}
 
-	if err := h.repo.AddMember(c.Request.Context(), workspaceId, req.UserID, role); err != nil {
-		httpx.Error(c, http.StatusInternalServerError, "failed to add member", map[string]string{"error": err.Error()})
+	userID, err := h.repo.FindUserIDByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(c, http.StatusInternalServerError, "user not found", map[string]string{"error": err.Error()})
+			return
+		}
+		httpx.Internal(c)
+		return
+	}
+
+	if err := h.repo.AddMemberByUserID(c.Request.Context(), workspaceId, userID, role); err != nil {
+		if errors.Is(err, ErrAlreadyMember) {
+			httpx.Conflict(c, "user already in conflict")
+			return
+		}
+		httpx.Internal(c)
 		return
 	}
 
@@ -111,11 +110,18 @@ type updateMemberRoleReq struct {
 }
 
 func (h *Handler) UpdateMemberRole(c *gin.Context) {
+	v, ok := c.Get(auth.CtxUserIDKey)
+	actorID, ok := v.(string)
+	if !ok || actorID == "" {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
 	workspaceID := c.Param("id")
-	userID := c.Param("user_id")
+	targetUserID := c.Param("userId")
 
 	var req updateMemberRoleReq
-	if err := c.ShouldBind(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		httpx.BadRequest(c, "invalid json", nil)
 		return
 	}
@@ -126,12 +132,18 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.UpdateMemberRole(c.Request.Context(), workspaceID, userID, role); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusNotFound, "member not found", nil)
-			return
+	err := h.repo.UpdateMemberRoleSafe(c.Request.Context(), workspaceID, actorID, targetUserID, role)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			httpx.Error(c, http.StatusNotFound, "user not found", nil)
+		case errors.Is(err, ErrCannotSelfDemote):
+			httpx.Conflict(c, "owner cannot change own role on mvp")
+		case errors.Is(err, ErrLastOwner):
+			httpx.Conflict(c, "cannot demote last owner")
+		default:
+			httpx.Internal(c)
 		}
-		httpx.Internal(c)
 		return
 	}
 
@@ -140,7 +152,7 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 
 func (h *Handler) RemoveMember(c *gin.Context) {
 	workspaceID := c.Param("id")
-	userID := c.Param("user_id")
+	userID := c.Param("userId")
 
 	if err := h.repo.RemoveMember(c.Request.Context(), workspaceID, userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -152,4 +164,47 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) ListMyWorkspaces(c *gin.Context) {
+	v, ok := c.Get(auth.CtxUserIDKey)
+	userID, ok := v.(string)
+	if !ok || userID == "" {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	items, err := h.repo.ListMyWorkspaces(c.Request.Context(), userID)
+	if err != nil {
+		httpx.Internal(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"workspaces": items})
+}
+
+func (h *Handler) GetWorkspace(c *gin.Context) {
+	v, ok := c.Get(auth.CtxUserIDKey)
+	userID, ok := v.(string)
+	if !ok || userID == "" {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	workspaceID := c.Param("id")
+
+	w, role, err := h.repo.GetWorkspaceWithRole(c.Request.Context(), workspaceID, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
+			return
+		}
+		httpx.Internal(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"workspace": w,
+		"role":      role,
+	})
 }

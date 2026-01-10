@@ -139,13 +139,14 @@ func registerWorkspacesRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWT
 	g.Use(authMW)
 
 	g.POST("", wsH.CreateWorkspace)
+	g.GET("", wsH.ListMyWorkspaces)
 
 	wsg := g.Group("/:id")
 	wsg.Use(workspaces.AccessRequired(wsRepo))
 
 	wsg.GET("", workspaces.RequireRole(workspaces.RoleViewer, workspaces.RoleMember, workspaces.RoleOwner), wsH.GetWorkspace)
 
-	wsg.GET("/members", workspaces.RequireRole(workspaces.RoleOwner), wsH.ListMembers)
+	wsg.GET("/members", workspaces.RequireRole(workspaces.RoleViewer, workspaces.RoleMember, workspaces.RoleOwner), wsH.ListMembers)
 	wsg.POST("/members", workspaces.RequireRole(workspaces.RoleOwner), wsH.AddMember)
 	wsg.PATCH("/members/:userId", workspaces.RequireRole(workspaces.RoleOwner), wsH.UpdateMemberRole)
 	wsg.DELETE("/members/:userId", workspaces.RequireRole(workspaces.RoleOwner), wsH.RemoveMember)
