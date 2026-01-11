@@ -2,12 +2,12 @@ package workspaces
 
 import (
 	"context"
+	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
 )
 
@@ -18,6 +18,7 @@ const (
 
 type RoleProvider interface {
 	GetUserRole(ctx context.Context, workspaceID, userID string) (string, error)
+	WorkspaceExists(ctx context.Context, workspaceID string) (bool, error)
 }
 
 func roleRank(r Role) int {
@@ -33,7 +34,11 @@ func roleRank(r Role) int {
 	}
 }
 
-func AccessRequired(repo RoleProvider) gin.HandlerFunc {
+func RoleAtLeast(actual, required Role) bool {
+	return roleRank(actual) >= roleRank(required)
+}
+
+func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		v, exists := c.Get(auth.CtxUserIDKey)
 		userID, ok := v.(string)
@@ -43,49 +48,52 @@ func AccessRequired(repo RoleProvider) gin.HandlerFunc {
 			return
 		}
 
-		wsStr := c.Param("id")
-		if _, err := uuid.Parse(wsStr); err != nil {
+		workspaceID := c.Param("id")
+		if _, err := uuid.Parse(workspaceID); err != nil {
 			httpx.BadRequest(c, "invalid workspace id", map[string]string{"id": "must be uuid"})
 			c.Abort()
 			return
 		}
 
-		role, err := repo.GetUserRole(c.Request.Context(), wsStr, userID)
+		roleStr, err := repo.GetUserRole(c.Request.Context(), workspaceID, userID)
 		if err != nil {
 			httpx.Internal(c)
 			c.Abort()
 			return
 		}
-		if role == "" {
+
+		if roleStr == "" {
+			if repo != nil {
+				exists, err := repo.WorkspaceExists(c.Request.Context(), workspaceID)
+				if err != nil {
+					httpx.Internal(c)
+					c.Abort()
+					return
+				}
+				if !exists {
+					httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
+					c.Abort()
+					return
+				}
+			}
 			httpx.Error(c, http.StatusForbidden, "not a workspace member", nil)
 			c.Abort()
 			return
 		}
 
-		c.Set(CtxWorkspaceIDKey, wsStr)
-		c.Set(CtxWorkspaceRoleKey, role)
-		c.Next()
-	}
-}
-
-func RequireMinRole(min Role) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		v, exists := c.Get(CtxWorkspaceRoleKey)
-		roleStr, _ := v.(string)
-		if !exists || roleStr == "" {
-			httpx.Internal(c)
-			c.Abort()
-			return
-		}
-
 		actual := Role(roleStr)
-		if roleRank(actual) < roleRank(min) {
+		if !RoleAtLeast(actual, minRole) {
 			httpx.Error(c, http.StatusForbidden, "insufficient role", map[string]string{
-				"required": string(min),
-				"actual":   roleStr})
+				"required": string(minRole),
+				"actual":   roleStr,
+			})
 			c.Abort()
 			return
 		}
+
+		c.Set(CtxWorkspaceIDKey, workspaceID)
+		c.Set(CtxWorkspaceRoleKey, roleStr)
+
 		c.Next()
 	}
 }

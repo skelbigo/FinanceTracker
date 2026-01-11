@@ -188,7 +188,7 @@ func (r *Repo) UpdateMemberRoleSafe(ctx context.Context, workspaceID, actorUserI
 
 	var current string
 	err = tx.QueryRow(ctx, `
-SELECT role FROM workspace_members
+SELECT role FROM workspaces_members
 WHERE workspace_id=$1 AND user_id=$2
 FOR UPDATE
 `, workspaceID, targetUserID).Scan(&current)
@@ -237,7 +237,7 @@ func (r *Repo) RemoveMemberSafe(ctx context.Context, workspaceID, actorUserID, t
 
 	var current string
 	err = tx.QueryRow(ctx, `
-SELECT role FROM workspace_members
+SELECT role FROM workspaces_members
 WHERE workspace_id=$1 AND user_id=$2
 FOR UPDATE
 `, workspaceID, targetUserID).Scan(&current)
@@ -270,4 +270,17 @@ WHERE workspace_id = $1::uuid AND user_id = $2::uuid
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (r *Repo) WorkspaceExists(ctx context.Context, workspaceID string) (bool, error) {
+	const q = `SELECT 1 FROM workspaces WHERE id = $1::uuid`
+	var one int
+	err := r.pool.QueryRow(ctx, q, workspaceID).Scan(&one)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

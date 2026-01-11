@@ -11,20 +11,20 @@ import (
 )
 
 type Handler struct {
-	svc      *Service
-	mw       gin.HandlerFunc
-	accessMW gin.HandlerFunc
+	svc  *Service
+	mw   gin.HandlerFunc
+	repo RoleProvider
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc, accessMW gin.HandlerFunc) *Handler {
+func NewHandler(svc *Service, authMW gin.HandlerFunc, repo RoleProvider) *Handler {
 	return &Handler{
-		svc:      svc,
-		mw:       authMW,
-		accessMW: accessMW,
+		svc:  svc,
+		mw:   authMW,
+		repo: repo,
 	}
 }
 
-func (h *Handler) RegisterRouts(r gin.IRouter) {
+func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/workspaces")
 	g.Use(h.mw)
 
@@ -32,14 +32,13 @@ func (h *Handler) RegisterRouts(r gin.IRouter) {
 	g.GET("", h.ListMyWorkspaces)
 
 	wsg := g.Group("/:id")
-	wsg.Use(h.accessMW)
 
-	wsg.GET("", RequireMinRole(RoleViewer), h.GetWorkspace)
-	wsg.GET("/members", RequireMinRole(RoleViewer), h.ListMembers)
+	wsg.GET("", RequireWorkspaceRole(h.repo, RoleViewer), h.GetWorkspace)
+	wsg.GET("/members", RequireWorkspaceRole(h.repo, RoleViewer), h.ListMembers)
 
-	wsg.POST("/members", RequireMinRole(RoleOwner), h.AddMember)
-	wsg.PATCH("/members/:userId", RequireMinRole(RoleOwner), h.UpdateMemberRole)
-	wsg.DELETE("/members/:userId", RequireMinRole(RoleOwner), h.RemoveMember)
+	wsg.POST("/members", RequireWorkspaceRole(h.repo, RoleOwner), h.AddMember)
+	wsg.PATCH("/members/:userId", RequireWorkspaceRole(h.repo, RoleOwner), h.UpdateMemberRole)
+	wsg.DELETE("/members/:userId", RequireWorkspaceRole(h.repo, RoleOwner), h.RemoveMember)
 }
 
 type createWorkspaceReq struct {
@@ -161,8 +160,6 @@ func (h *Handler) AddMember(c *gin.Context) {
 	default:
 		httpx.Internal(c)
 	}
-
-	c.Status(http.StatusCreated)
 }
 
 func (h *Handler) UpdateMemberRole(c *gin.Context) {

@@ -93,7 +93,7 @@ func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gi
 	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
 
 	registerAuthRoutes(r, cfg, pool, jwtMgr)
-	registerWorkspacesRouts(r, pool, jwtMgr)
+	registerWorkspacesRoutes(r, pool, jwtMgr)
 
 	return r
 }
@@ -127,10 +127,11 @@ func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool, jw
 	authH.RegisterRoutes(r)
 }
 
-func registerWorkspacesRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
+func registerWorkspacesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
 	authMW := auth.AuthRequired(jwtMgr)
+
 	wsRepo := workspaces.NewRepo(pool)
 	wsSvc := workspaces.NewService(wsRepo)
-	wsH := workspaces.NewHandler(wsSvc, authMW, workspaces.AccessRequired(wsRepo))
-	wsH.RegisterRouts(r)
+	wsH := workspaces.NewHandler(wsSvc, authMW, wsRepo)
+	wsH.RegisterRoutes(r)
 }
