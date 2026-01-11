@@ -5,6 +5,11 @@ services:
       dockerfile: Dockerfile
     container_name: financetracker-api
     env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      APP_PORT: "8080"
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:
@@ -21,7 +26,6 @@ services:
       POSTGRES_USER: ${DB_USER:?DB_USER required}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       POSTGRES_DB: ${DB_NAME:?DB_NAME required}
-      DB_HOST: postgres
       DB_URL: postgres://postgres:postgres@postgres:5432/financetracker?sslmode=disable
     ports:
       - "5432:5432"

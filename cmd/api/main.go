@@ -120,34 +120,17 @@ func registerHealthRoutes(r *gin.Engine, pool *pgxpool.Pool, startedAt time.Time
 
 func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
 	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
-
 	authRepo := auth.NewRepo(pool)
 	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
 	authMW := auth.AuthRequired(jwtMgr)
 	authH := auth.NewHandler(authSvc, authMW)
-
 	authH.RegisterRoutes(r)
 }
 
 func registerWorkspacesRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
 	authMW := auth.AuthRequired(jwtMgr)
-
 	wsRepo := workspaces.NewRepo(pool)
-	wsH := workspaces.NewHandler(wsRepo)
-
-	g := r.Group("/workspaces")
-	g.Use(authMW)
-
-	g.POST("", wsH.CreateWorkspace)
-	g.GET("", wsH.ListMyWorkspaces)
-
-	wsg := g.Group("/:id")
-	wsg.Use(workspaces.AccessRequired(wsRepo))
-
-	wsg.GET("", workspaces.RequireRole(workspaces.RoleViewer, workspaces.RoleMember, workspaces.RoleOwner), wsH.GetWorkspace)
-
-	wsg.GET("/members", workspaces.RequireRole(workspaces.RoleViewer, workspaces.RoleMember, workspaces.RoleOwner), wsH.ListMembers)
-	wsg.POST("/members", workspaces.RequireRole(workspaces.RoleOwner), wsH.AddMember)
-	wsg.PATCH("/members/:userId", workspaces.RequireRole(workspaces.RoleOwner), wsH.UpdateMemberRole)
-	wsg.DELETE("/members/:userId", workspaces.RequireRole(workspaces.RoleOwner), wsH.RemoveMember)
+	wsSvc := workspaces.NewService(wsRepo)
+	wsH := workspaces.NewHandler(wsSvc, authMW, workspaces.AccessRequired(wsRepo))
+	wsH.RegisterRouts(r)
 }

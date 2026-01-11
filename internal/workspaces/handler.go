@@ -11,11 +11,35 @@ import (
 )
 
 type Handler struct {
-	repo *Repo
+	svc      *Service
+	mw       gin.HandlerFunc
+	accessMW gin.HandlerFunc
 }
 
-func NewHandler(repo *Repo) *Handler {
-	return &Handler{repo: repo}
+func NewHandler(svc *Service, authMW gin.HandlerFunc, accessMW gin.HandlerFunc) *Handler {
+	return &Handler{
+		svc:      svc,
+		mw:       authMW,
+		accessMW: accessMW,
+	}
+}
+
+func (h *Handler) RegisterRouts(r gin.IRouter) {
+	g := r.Group("/workspaces")
+	g.Use(h.mw)
+
+	g.POST("", h.CreateWorkspace)
+	g.GET("", h.ListMyWorkspaces)
+
+	wsg := g.Group("/:id")
+	wsg.Use(h.accessMW)
+
+	wsg.GET("", RequireMinRole(RoleViewer), h.GetWorkspace)
+	wsg.GET("/members", RequireMinRole(RoleViewer), h.ListMembers)
+
+	wsg.POST("/members", RequireMinRole(RoleOwner), h.AddMember)
+	wsg.PATCH("/members/:userId", RequireMinRole(RoleOwner), h.UpdateMemberRole)
+	wsg.DELETE("/members/:userId", RequireMinRole(RoleOwner), h.RemoveMember)
 }
 
 type createWorkspaceReq struct {
@@ -23,10 +47,24 @@ type createWorkspaceReq struct {
 	DefaultCurrency string `json:"default_currency"`
 }
 
+type addMemberReq struct {
+	Email string `json:"email" binding:"required, email"`
+	Role  string `json:"role" binding:"required"`
+}
+
+type updateMemberRoleReq struct {
+	Role string `json:"role" binding:"required"`
+}
+
+func userIDFromCtx(c *gin.Context) (string, bool) {
+	v, exists := c.Get(auth.CtxUserIDKey)
+	id, ok := v.(string)
+	return id, exists && ok && id != ""
+}
+
 func (h *Handler) CreateWorkspace(c *gin.Context) {
-	v, ok := c.Get(auth.CtxUserIDKey)
-	creatorID, ok := v.(string)
-	if !ok || creatorID == "" {
+	creatorID, ok := userIDFromCtx(c)
+	if !ok {
 		httpx.Unauthorized(c, "invalid token")
 		return
 	}
@@ -37,24 +75,61 @@ func (h *Handler) CreateWorkspace(c *gin.Context) {
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	req.DefaultCurrency = strings.TrimSpace(req.DefaultCurrency)
-
-	w, err := h.repo.CreateWorkspaceWithOwner(c.Request.Context(), creatorID, req.Name, req.DefaultCurrency)
+	w, role, err := h.svc.CreateWorkspace(c.Request.Context(), creatorID, strings.TrimSpace(req.Name), strings.TrimSpace(req.DefaultCurrency))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		httpx.Internal(c)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
 		"workspace": w,
-		"role":      RoleOwner,
+		"role":      role,
+	})
+}
+
+func (h *Handler) ListMyWorkspaces(c *gin.Context) {
+	userID, ok := userIDFromCtx(c)
+	if !ok {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	items, err := h.svc.ListMyWorkspaces(c.Request.Context(), userID)
+	if err != nil {
+		httpx.Internal(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"workspaces": items})
+}
+
+func (h *Handler) GetWorkspace(c *gin.Context) {
+	userID, ok := userIDFromCtx(c)
+	if !ok {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	workspaceID := c.Param("id")
+	w, role, err := h.svc.GetWorkspace(c.Request.Context(), workspaceID, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
+			return
+		}
+		httpx.Internal(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"workspace": w,
+		"role":      role,
 	})
 }
 
 func (h *Handler) ListMembers(c *gin.Context) {
 	workspaceID := c.Param("id")
 
-	members, err := h.repo.ListMembers(c.Request.Context(), workspaceID)
+	members, err := h.svc.ListMembers(c.Request.Context(), workspaceID)
 	if err != nil {
 		httpx.Internal(c)
 		return
@@ -63,13 +138,8 @@ func (h *Handler) ListMembers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"members": members})
 }
 
-type addMemberReq struct {
-	Email string `json:"email" binding:"required, email"`
-	Role  string `json:"role" binding:"required"`
-}
-
 func (h *Handler) AddMember(c *gin.Context) {
-	workspaceId := c.Param("id")
+	workspaceID := c.Param("id")
 
 	var req addMemberReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,41 +148,26 @@ func (h *Handler) AddMember(c *gin.Context) {
 	}
 
 	role := Role(strings.TrimSpace(req.Role))
-	if role != RoleOwner && role != RoleMember && role != RoleViewer {
-		httpx.Unprocessable(c, "invalid role", map[string]string{"role": "role must be one of owner | member | viewer"})
-		return
-	}
-
-	userID, err := h.repo.FindUserIDByEmail(c.Request.Context(), req.Email)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusInternalServerError, "user not found", map[string]string{"error": err.Error()})
-			return
-		}
+	err := h.svc.AddMemberByEmail(c.Request.Context(), workspaceID, req.Email, role)
+	switch {
+	case err == nil:
+		c.Status(http.StatusCreated)
+	case errors.Is(err, ErrUserNotFound):
+		httpx.Error(c, http.StatusNotFound, "user not found", nil)
+	case errors.Is(err, ErrAlreadyMember):
+		httpx.Conflict(c, "user already a member")
+	case errors.Is(err, ErrInvalidRole):
+		httpx.Unprocessable(c, "invalid role", map[string]string{"role": "owner|member|viewer"})
+	default:
 		httpx.Internal(c)
-		return
-	}
-
-	if err := h.repo.AddMemberByUserID(c.Request.Context(), workspaceId, userID, role); err != nil {
-		if errors.Is(err, ErrAlreadyMember) {
-			httpx.Conflict(c, "user already in conflict")
-			return
-		}
-		httpx.Internal(c)
-		return
 	}
 
 	c.Status(http.StatusCreated)
 }
 
-type updateMemberRoleReq struct {
-	Role string `json:"role" binding:"required"`
-}
-
 func (h *Handler) UpdateMemberRole(c *gin.Context) {
-	v, ok := c.Get(auth.CtxUserIDKey)
-	actorID, ok := v.(string)
-	if !ok || actorID == "" {
+	actorID, ok := userIDFromCtx(c)
+	if !ok {
 		httpx.Unauthorized(c, "invalid token")
 		return
 	}
@@ -132,7 +187,7 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 
-	err := h.repo.UpdateMemberRoleSafe(c.Request.Context(), workspaceID, actorID, targetUserID, role)
+	err := h.svc.UpdateMemberRole(c.Request.Context(), workspaceID, actorID, targetUserID, role)
 	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -151,60 +206,27 @@ func (h *Handler) UpdateMemberRole(c *gin.Context) {
 }
 
 func (h *Handler) RemoveMember(c *gin.Context) {
-	workspaceID := c.Param("id")
-	userID := c.Param("userId")
+	actorID, ok := userIDFromCtx(c)
+	if !ok {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
 
-	if err := h.repo.RemoveMember(c.Request.Context(), workspaceID, userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	workspaceID := c.Param("id")
+	targetUserID := c.Param("userId")
+
+	err := h.svc.RemoveMember(c.Request.Context(), workspaceID, actorID, targetUserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
 			httpx.Error(c, http.StatusNotFound, "member not found", nil)
-			return
+		case errors.Is(err, ErrLastOwner):
+			httpx.Conflict(c, "cannot remove last owner")
+		default:
+			httpx.Internal(c)
 		}
-		httpx.Internal(c)
 		return
 	}
 
 	c.Status(http.StatusNoContent)
-}
-
-func (h *Handler) ListMyWorkspaces(c *gin.Context) {
-	v, ok := c.Get(auth.CtxUserIDKey)
-	userID, ok := v.(string)
-	if !ok || userID == "" {
-		httpx.Unauthorized(c, "invalid token")
-		return
-	}
-
-	items, err := h.repo.ListMyWorkspaces(c.Request.Context(), userID)
-	if err != nil {
-		httpx.Internal(c)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"workspaces": items})
-}
-
-func (h *Handler) GetWorkspace(c *gin.Context) {
-	v, ok := c.Get(auth.CtxUserIDKey)
-	userID, ok := v.(string)
-	if !ok || userID == "" {
-		httpx.Unauthorized(c, "invalid token")
-		return
-	}
-
-	workspaceID := c.Param("id")
-
-	w, role, err := h.repo.GetWorkspaceWithRole(c.Request.Context(), workspaceID, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
-			return
-		}
-		httpx.Internal(c)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"workspace": w,
-		"role":      role,
-	})
 }
