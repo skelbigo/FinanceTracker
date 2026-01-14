@@ -30,7 +30,7 @@ func NewPostgresPool(ctx context.Context, dbc DBConfig) (*pgxpool.Pool, error) {
 }
 
 func NewPostgresPoolWithConfig(ctx context.Context, dbc DBConfig, pc PoolConfig) (*pgxpool.Pool, error) {
-	connStr := BuildPostgresURL(dbc) // (після 3-го пункту — один формат)
+	connStr := BuildPostgresURL(dbc)
 
 	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
@@ -68,4 +68,29 @@ func MaskedURL(c DBConfig) string {
 	q.Set("sslmode", c.SSLMode)
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+func NewPostgresPoolFromURL(ctx context.Context, dbURL string, pc PoolConfig) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.MaxConns = pc.MaxConns
+	cfg.MinConns = pc.MinConns
+	cfg.MaxConnLifetime = pc.MaxConnLifetime
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	pingCtx, cancel := context.WithTimeout(context.Background(), pc.PingTimeout)
+	defer cancel()
+
+	if err := pool.Ping(pingCtx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
 }

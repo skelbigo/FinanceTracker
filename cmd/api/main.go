@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"log"
 	"net/http"
@@ -94,6 +95,7 @@ func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gi
 
 	registerAuthRoutes(r, cfg, pool, jwtMgr)
 	registerWorkspacesRoutes(r, pool, jwtMgr)
+	registerCategoriesRoutes(r, pool, jwtMgr)
 
 	return r
 }
@@ -134,4 +136,15 @@ func registerWorkspacesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JW
 	wsSvc := workspaces.NewService(wsRepo)
 	wsH := workspaces.NewHandler(wsSvc, authMW, wsRepo)
 	wsH.RegisterRoutes(r)
+}
+
+func registerCategoriesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
+	authMW := auth.AuthRequired(jwtMgr)
+
+	wsRepo := workspaces.NewRepo(pool)
+	catRepo := categories.NewRepo(pool)
+	catSvc := categories.NewService(catRepo)
+	catH := categories.NewHandler(catSvc, authMW, wsRepo)
+
+	catH.RegisterRoutes(r)
 }

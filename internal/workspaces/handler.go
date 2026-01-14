@@ -47,7 +47,7 @@ type createWorkspaceReq struct {
 }
 
 type addMemberReq struct {
-	Email string `json:"email" binding:"required, email"`
+	Email string `json:"email" binding:"required,email"`
 	Role  string `json:"role" binding:"required"`
 }
 

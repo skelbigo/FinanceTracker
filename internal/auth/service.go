@@ -133,9 +133,16 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 		return RefreshResponse{}, errors.New("refresh token is required")
 	}
 
-	hash := HashRefreshToken(plain)
+	oldHash := HashRefreshToken(plain)
 
-	userID, ok, err := s.repo.ConsumeRefreshToken(ctx, hash)
+	newPlain, err := GenerateRefreshToken()
+	if err != nil {
+		return RefreshResponse{}, err
+	}
+	newHash := HashRefreshToken(newPlain)
+	newExpires := time.Now().Add(s.refreshTTL)
+
+	userID, ok, err := s.repo.RotateRefreshToken(ctx, oldHash, newHash, newExpires)
 	if err != nil {
 		return RefreshResponse{}, err
 	}
@@ -145,18 +152,6 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 
 	access, err := s.jwt.GenerateAccessToken(userID)
 	if err != nil {
-		return RefreshResponse{}, err
-	}
-
-	newPlain, err := GenerateRefreshToken()
-	if err != nil {
-		return RefreshResponse{}, err
-	}
-
-	newHash := HashRefreshToken(newPlain)
-	newExpires := time.Now().Add(s.refreshTTL)
-
-	if err := s.repo.InsertRefreshToken(ctx, userID, newHash, newExpires); err != nil {
 		return RefreshResponse{}, err
 	}
 

@@ -108,3 +108,40 @@ WHERE id = $1::uuid
 	}
 	return u, nil
 }
+
+func (r *Repo) RotateRefreshToken(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (string, bool, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	const consume = `
+UPDATE refresh_tokens
+SET revoked_at = NOW(
+WHERE token_hash = $1
+AND revoked_at IS NULL
+AND expires_at > NOW()
+RETURNING user_id::text
+`
+	var userID string
+	if err := tx.QueryRow(ctx, consume, oldHash).Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+
+	const insert = `
+INSERT INTO refresh_tokens(user_id, token_hash, expires_at, revoked_at)
+VALUES ($1::uuid, $2, $3, NULL)
+`
+	if _, err := tx.Exec(ctx, insert, userID, newHash, expiresAt); err != nil {
+		return "", false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", false, err
+	}
+	return userID, true, nil
+}

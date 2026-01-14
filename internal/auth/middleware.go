@@ -2,7 +2,7 @@ package auth
 
 import (
 	"github.com/gin-gonic/gin"
-	"net/http"
+	"github.com/skelbigo/FinanceTracker/internal/httpx"
 	"strings"
 )
 
@@ -12,13 +12,15 @@ func AuthRequired(jwtm *JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, ok := bearerToken(c.GetHeader("Authorization"))
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid authorization"})
+			httpx.Unauthorized(c, "invalid authorization")
+			c.Abort()
 			return
 		}
 
 		userID, err := jwtm.ParseAndValidate(tokenStr)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+			httpx.Unauthorized(c, "invalid token")
+			c.Abort()
 			return
 		}
 

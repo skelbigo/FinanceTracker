@@ -2,6 +2,8 @@ package migrator
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -19,10 +21,14 @@ func Run(migrationsPath, dbURL, cmd string) error {
 		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 			return fmt.Errorf("migrate up error: %w", err)
 		}
+		return nil
+
 	case "down":
 		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 			return fmt.Errorf("migrate down error: %w", err)
 		}
+		return nil
+
 	case "version":
 		v, dirty, err := m.Version()
 		if err == migrate.ErrNilVersion {
@@ -33,9 +39,20 @@ func Run(migrationsPath, dbURL, cmd string) error {
 			return fmt.Errorf("version error: %w", err)
 		}
 		fmt.Printf("version=%d dirty=%v\n", v, dirty)
-	default:
-		return fmt.Errorf("unknown migrate command: %s (use: up|down|version)", cmd)
-	}
+		return nil
 
-	return nil
+	default:
+		if strings.HasPrefix(cmd, "force:") {
+			vStr := strings.TrimPrefix(cmd, "force:")
+			v, err := strconv.Atoi(vStr)
+			if err != nil {
+				return fmt.Errorf("invalid force version: %q", vStr)
+			}
+			if err := m.Force(v); err != nil {
+				return fmt.Errorf("force error: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unknown migrate command: %s (use: up|down|version|force:<n>)", cmd)
+	}
 }
