@@ -70,12 +70,15 @@ func MaskedURL(c DBConfig) string {
 	return u.String()
 }
 
-func NewPostgresPoolFromURL(ctx context.Context, dbURL string, pc PoolConfig) (*pgxpool.Pool, error) {
+func NewPostgresPoolFromURL(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	return NewPostgresPoolFromURLWithConfig(ctx, dbURL, DefaultPoolConfig())
+}
+
+func NewPostgresPoolFromURLWithConfig(ctx context.Context, dbURL string, pc PoolConfig) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		return nil, err
 	}
-
 	cfg.MaxConns = pc.MaxConns
 	cfg.MinConns = pc.MinConns
 	cfg.MaxConnLifetime = pc.MaxConnLifetime

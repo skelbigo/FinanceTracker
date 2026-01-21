@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
+	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"log"
 	"net/http"
@@ -34,15 +35,6 @@ func main() {
 		log.Fatalf("invalid environment: %v", err)
 	}
 
-	dbCfg := db.DBConfig{
-		Host:     cfg.DBHost,
-		Port:     cfg.DBPort,
-		User:     cfg.DBUser,
-		Password: cfg.DBPassword,
-		Name:     cfg.DBName,
-		SSLMode:  cfg.DBSSLMode,
-	}
-
 	switch *mode {
 	case "migrate":
 		dbURL := cfg.EffectiveDBURL()
@@ -53,7 +45,7 @@ func main() {
 		log.Printf("migrations done: cmd=%s dir=%s", *cmd, *migrationsDir)
 
 	case "serve":
-		serve(cfg, dbCfg, startedAt)
+		serve(cfg, startedAt)
 
 	default:
 		flag.Usage()
@@ -61,11 +53,12 @@ func main() {
 	}
 }
 
-func serve(cfg config.Config, dbCfg db.DBConfig, startedAt time.Time) {
+func serve(cfg config.Config, startedAt time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pool := mustDB(ctx, dbCfg)
+	dbURL := cfg.EffectiveDBURL()
+	pool := mustDBURL(ctx, dbURL)
 	defer pool.Close()
 
 	r := setupRouter(cfg, pool, startedAt)
@@ -77,10 +70,10 @@ func serve(cfg config.Config, dbCfg db.DBConfig, startedAt time.Time) {
 	}
 }
 
-func mustDB(ctx context.Context, dbCfg db.DBConfig) *pgxpool.Pool {
-	pool, err := db.NewPostgresPool(ctx, dbCfg)
+func mustDBURL(ctx context.Context, dbURL string) *pgxpool.Pool {
+	pool, err := db.NewPostgresPoolFromURL(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("db connection error (%s): %v", db.MaskedURL(dbCfg), err)
+		log.Fatalf("db connection error (%s): %v", dbURL, err)
 	}
 	return pool
 }
@@ -96,6 +89,7 @@ func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gi
 	registerAuthRoutes(r, cfg, pool, jwtMgr)
 	registerWorkspacesRoutes(r, pool, jwtMgr)
 	registerCategoriesRoutes(r, pool, jwtMgr)
+	registerTransactionsRoutes(r, pool, jwtMgr)
 
 	return r
 }
@@ -147,4 +141,14 @@ func registerCategoriesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JW
 	catH := categories.NewHandler(catSvc, authMW, wsRepo)
 
 	catH.RegisterRoutes(r)
+}
+
+func registerTransactionsRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
+	authMW := auth.AuthRequired(jwtMgr)
+
+	wsRepo := workspaces.NewRepo(pool)
+	txRepo := transactions.NewRepo(pool)
+	txSvc := transactions.NewService(txRepo)
+	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
+	txH.RegisterRoutes(r)
 }
