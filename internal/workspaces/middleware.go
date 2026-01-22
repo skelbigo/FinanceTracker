@@ -2,12 +2,12 @@ package workspaces
 
 import (
 	"context"
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
 )
 
@@ -40,6 +40,12 @@ func RoleAtLeast(actual, required Role) bool {
 
 func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if repo == nil {
+			httpx.Internal(c)
+			c.Abort()
+			return
+		}
+
 		v, exists := c.Get(auth.CtxUserIDKey)
 		userID, ok := v.(string)
 		if !exists || !ok || userID == "" {
@@ -49,6 +55,15 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 		}
 
 		workspaceID := c.Param("id")
+		if workspaceID == "" {
+			workspaceID = c.Param("workspaceId")
+		}
+		if workspaceID == "" {
+			httpx.BadRequest(c, "invalid workspace id", map[string]string{"id": "required"})
+			c.Abort()
+			return
+		}
+
 		if _, err := uuid.Parse(workspaceID); err != nil {
 			httpx.BadRequest(c, "invalid workspace id", map[string]string{"id": "must be uuid"})
 			c.Abort()
@@ -63,19 +78,18 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 		}
 
 		if roleStr == "" {
-			if repo != nil {
-				exists, err := repo.WorkspaceExists(c.Request.Context(), workspaceID)
-				if err != nil {
-					httpx.Internal(c)
-					c.Abort()
-					return
-				}
-				if !exists {
-					httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
-					c.Abort()
-					return
-				}
+			exists, err := repo.WorkspaceExists(c.Request.Context(), workspaceID)
+			if err != nil {
+				httpx.Internal(c)
+				c.Abort()
+				return
 			}
+			if !exists {
+				httpx.Error(c, http.StatusNotFound, "workspace not found", nil)
+				c.Abort()
+				return
+			}
+
 			httpx.Error(c, http.StatusForbidden, "not a workspace member", nil)
 			c.Abort()
 			return
