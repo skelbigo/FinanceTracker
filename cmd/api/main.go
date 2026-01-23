@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
@@ -92,6 +93,7 @@ func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gi
 	registerCategoriesRoutes(r, pool, jwtMgr)
 	registerTransactionsRoutes(r, pool, jwtMgr)
 	registerBudgetsRoutes(r, pool, jwtMgr)
+	registerAnalyticsRouts(r, pool, jwtMgr)
 
 	return r
 }
@@ -164,4 +166,16 @@ func registerBudgetsRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTMa
 	bSvc := budgets.NewService(bRepo, catLookup, true)
 	bH := budgets.NewHandler(bSvc, wsRepo, authMW)
 	bH.RegisterRoutes(r)
+}
+
+func registerAnalyticsRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
+	authMW := auth.AuthRequired(jwtMgr)
+
+	wsRepo := workspaces.NewRepo(pool)
+
+	aRepo := analytics.NewRepo(pool)
+	aSvc := analytics.NewService(aRepo)
+	aH := analytics.NewHandler(aSvc, authMW, wsRepo)
+
+	aH.RegisterRoutes(r)
 }

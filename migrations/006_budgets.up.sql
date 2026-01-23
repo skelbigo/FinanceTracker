@@ -16,7 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets (category_id);
 CREATE OR REPLACE FUNCTION budgets_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.apdated_at = now();
+    NEW.updated_at = now();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
