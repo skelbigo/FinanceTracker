@@ -45,7 +45,6 @@ RETURNING id::text, name, default_currency, created_by::text, created_at`, name,
 		return Workspace{}, err
 	}
 
-	fmt.Printf("DEBUG owner insert ws=%q user=%q\n", w.ID, createdBy)
 	_, err = tx.Exec(ctx, `
 insert into workspaces_members (workspace_id, user_id, role)
 values ($1::uuid, $2::uuid, 'owner')

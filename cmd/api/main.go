@@ -2,180 +2,167 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/skelbigo/FinanceTracker/internal/analytics"
-	"github.com/skelbigo/FinanceTracker/internal/budgets"
-	"github.com/skelbigo/FinanceTracker/internal/categories"
-	"github.com/skelbigo/FinanceTracker/internal/transactions"
-	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/config"
 	"github.com/skelbigo/FinanceTracker/internal/db"
+	"github.com/skelbigo/FinanceTracker/internal/httpapi"
 	"github.com/skelbigo/FinanceTracker/internal/migrator"
 )
 
+type cliFlags struct {
+	mode          string
+	cmd           string
+	migrationsDir string
+	dotenv        string
+}
+
+func parseFlags() cliFlags {
+	mode := flag.String("mode", "serve", "run mode: serve|migrate")
+	cmd := flag.String("cmd", "up", "migrate command (used only with -mode=migrate): up|down|status|version|force:<n>")
+	migrationsDir := flag.String("migrations", "migrations", "path to migrations directory")
+	dotenv := flag.String("dotenv", ".env", "path to dotenv file; set empty to disable")
+	flag.Parse()
+
+	return cliFlags{
+		mode:          *mode,
+		cmd:           *cmd,
+		migrationsDir: *migrationsDir,
+		dotenv:        *dotenv,
+	}
+}
+
+func loadDotenv(path string) error {
+	if path == "" {
+		return nil
+	}
+	return godotenv.Load(path)
+}
+
 func main() {
 	startedAt := time.Now()
-	_ = godotenv.Load()
+	logger := log.New(os.Stdout, "", log.LstdFlags|log.LUTC)
 
-	mode := flag.String("mode", "serve", "run mode: serve|migrate")
-	cmd := flag.String("cmd", "up", "migrate command (used only with -mode=migrate): up|down|status|... (depends on migrator)")
-	migrationsDir := flag.String("migrations", "migrations", "path to migrations directory")
-	flag.Parse()
+	f := parseFlags()
+	if err := loadDotenv(f.dotenv); err != nil && os.Getenv("APP_ENV") == "dev" {
+		logger.Printf(".env not loaded (dev expects it): %v", err)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("invalid environment: %v", err)
 	}
 
-	switch *mode {
+	switch f.mode {
 	case "migrate":
 		dbURL := cfg.EffectiveDBURL()
-
-		if err := migrator.Run(*migrationsDir, dbURL, *cmd); err != nil {
-			log.Fatalf("migrate cmd=%s dir=%s failed: %v", *cmd, *migrationsDir, err)
+		if err := migrator.Run(f.migrationsDir, dbURL, f.cmd, os.Stdout); err != nil {
+			logger.Fatalf("migrate cmd=%s dir=%s failed: %v", f.cmd, f.migrationsDir, err)
 		}
-		log.Printf("migrations done: cmd=%s dir=%s", *cmd, *migrationsDir)
+		logger.Printf("migrations done: cmd=%s dir=%s", f.cmd, f.migrationsDir)
 
 	case "serve":
-		serve(cfg, startedAt)
+		if err := serve(cfg, startedAt, logger); err != nil {
+			logger.Fatalf("startup failed: %v", err)
+		}
 
 	default:
 		flag.Usage()
-		log.Fatalf("unknown -mode=%q (use: serve|migrate)", *mode)
+		logger.Fatalf("unknown -mode=%q (use: serve|migrate)", f.mode)
 	}
 }
 
-func serve(cfg config.Config, startedAt time.Time) {
+func serve(cfg config.Config, startedAt time.Time, logger *log.Logger) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	dbURL := cfg.EffectiveDBURL()
-	pool := mustDBURL(ctx, dbURL)
+	pool, err := newDBPool(ctx, dbURL)
+	if err != nil {
+		return err
+	}
 	defer pool.Close()
 
-	r := setupRouter(cfg, pool, startedAt)
+	gin.DefaultWriter = logger.Writer()
+	gin.DefaultErrorWriter = logger.Writer()
+
+	app := httpapi.NewApp(cfg, pool, startedAt)
+	r := app.Router(logger.Writer())
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
-	log.Printf("Starting FinanceTracker API mode=%s addr=%s", gin.Mode(), addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatal(err)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	runCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignal()
+
+	if err := runHTTPServer(runCtx, srv, addr, logger); err != nil {
+		return fmt.Errorf("server failed: %w", err)
+	}
+
+	logger.Printf("Server stopped")
+	return nil
+}
+
+func runHTTPServer(ctx context.Context, srv *http.Server, addr string, logger *log.Logger) error {
+	errCh := make(chan error, 1)
+
+	go func() {
+		logger.Printf("Starting FinanceTracker API mode=%s addr=%s", gin.Mode(), addr)
+		errCh <- srv.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+	case err := <-errCh:
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Printf("graceful shutdown failed: %v", err)
+		_ = srv.Close()
+	}
+
+	select {
+	case err := <-errCh:
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-shutdownCtx.Done():
+		return nil
 	}
 }
 
-func mustDBURL(ctx context.Context, dbURL string) *pgxpool.Pool {
+func newDBPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	pool, err := db.NewPostgresPoolFromURL(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("db connection error (%s): %v", dbURL, err)
+		return nil, fmt.Errorf("db connect (%s): %w", db.MaskPostgresURL(dbURL), err)
 	}
-	return pool
-}
-
-func setupRouter(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *gin.Engine {
-	r := gin.Default()
-
-	registerHealthRoutes(r, pool, startedAt)
-
-	accessTTL := time.Duration(cfg.JWTAccessTTLMinutes) * time.Minute
-	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
-
-	registerAuthRoutes(r, cfg, pool, jwtMgr)
-	registerWorkspacesRoutes(r, pool, jwtMgr)
-	registerCategoriesRoutes(r, pool, jwtMgr)
-	registerTransactionsRoutes(r, pool, jwtMgr)
-	registerBudgetsRoutes(r, pool, jwtMgr)
-	registerAnalyticsRouts(r, pool, jwtMgr)
-
-	return r
-}
-
-func registerHealthRoutes(r *gin.Engine, pool *pgxpool.Pool, startedAt time.Time) {
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"uptime": time.Since(startedAt).String(),
-		})
-	})
-
-	r.GET("/ready", func(c *gin.Context) {
-		ctxPing, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-		defer cancel()
-
-		if err := pool.Ping(ctxPing); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready", "db": "down"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready", "db": "up"})
-	})
-}
-
-func registerAuthRoutes(r *gin.Engine, cfg config.Config, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	refreshTTL := time.Duration(cfg.RefreshTTLDays) * 24 * time.Hour
-	authRepo := auth.NewRepo(pool)
-	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
-	authMW := auth.AuthRequired(jwtMgr)
-	authH := auth.NewHandler(authSvc, authMW)
-	authH.RegisterRoutes(r)
-}
-
-func registerWorkspacesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	authMW := auth.AuthRequired(jwtMgr)
-
-	wsRepo := workspaces.NewRepo(pool)
-	wsSvc := workspaces.NewService(wsRepo)
-	wsH := workspaces.NewHandler(wsSvc, authMW, wsRepo)
-	wsH.RegisterRoutes(r)
-}
-
-func registerCategoriesRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	authMW := auth.AuthRequired(jwtMgr)
-
-	wsRepo := workspaces.NewRepo(pool)
-	catRepo := categories.NewRepo(pool)
-	catSvc := categories.NewService(catRepo)
-	catH := categories.NewHandler(catSvc, authMW, wsRepo)
-
-	catH.RegisterRoutes(r)
-}
-
-func registerTransactionsRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	authMW := auth.AuthRequired(jwtMgr)
-
-	wsRepo := workspaces.NewRepo(pool)
-	txRepo := transactions.NewRepo(pool)
-	txSvc := transactions.NewService(txRepo)
-	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
-	txH.RegisterRoutes(r)
-}
-
-func registerBudgetsRoutes(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	authMW := auth.AuthRequired(jwtMgr)
-
-	wsRepo := workspaces.NewRepo(pool)
-	bRepo := budgets.NewRepo(pool)
-	catLookup := budgets.NewCategoryLookup(pool)
-	bSvc := budgets.NewService(bRepo, catLookup, true)
-	bH := budgets.NewHandler(bSvc, wsRepo, authMW)
-	bH.RegisterRoutes(r)
-}
-
-func registerAnalyticsRouts(r *gin.Engine, pool *pgxpool.Pool, jwtMgr *auth.JWTManager) {
-	authMW := auth.AuthRequired(jwtMgr)
-
-	wsRepo := workspaces.NewRepo(pool)
-
-	aRepo := analytics.NewRepo(pool)
-	aSvc := analytics.NewService(aRepo)
-	aH := analytics.NewHandler(aSvc, authMW, wsRepo)
-
-	aH.RegisterRoutes(r)
+	return pool, nil
 }

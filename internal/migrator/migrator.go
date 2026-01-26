@@ -2,6 +2,7 @@ package migrator
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -10,7 +11,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func Run(migrationsPath, dbURL, cmd string) error {
+func Run(migrationsPath, dbURL, cmd string, out io.Writer) error {
+	if out == nil {
+		out = io.Discard
+	}
 	m, err := migrate.New("file://"+migrationsPath, dbURL)
 	if err != nil {
 		return fmt.Errorf("migrate init error: %w", err)
@@ -29,16 +33,16 @@ func Run(migrationsPath, dbURL, cmd string) error {
 		}
 		return nil
 
-	case "version":
+	case "version", "status":
 		v, dirty, err := m.Version()
 		if err == migrate.ErrNilVersion {
-			fmt.Println("no version applied yet")
+			fmt.Fprintln(out, "no version applied yet")
 			return nil
 		}
 		if err != nil {
 			return fmt.Errorf("version error: %w", err)
 		}
-		fmt.Printf("version=%d dirty=%v\n", v, dirty)
+		fmt.Fprintf(out, "version=%d dirty=%v\n", v, dirty)
 		return nil
 
 	default:

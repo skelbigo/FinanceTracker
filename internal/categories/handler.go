@@ -34,7 +34,11 @@ type CreateCategoryReq struct {
 }
 
 func (h *Handler) create(c *gin.Context) {
-	workspaceID := c.Param("id")
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
 
 	var req CreateCategoryReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -64,7 +68,11 @@ func (h *Handler) create(c *gin.Context) {
 }
 
 func (h *Handler) list(c *gin.Context) {
-	workspaceID := c.Param("id")
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
 
 	items, err := h.svc.List(c.Request.Context(), workspaceID)
 	if err != nil {

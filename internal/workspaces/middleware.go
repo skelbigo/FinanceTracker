@@ -38,6 +38,24 @@ func RoleAtLeast(actual, required Role) bool {
 	return roleRank(actual) >= roleRank(required)
 }
 
+func GetWorkspaceRole(c *gin.Context) (Role, bool) {
+	v, ok := c.Get(CtxWorkspaceRoleKey)
+	if !ok {
+		return "", false
+	}
+	r, ok := v.(Role)
+	return r, ok
+}
+
+func GetWorkspaceID(c *gin.Context) (string, bool) {
+	v, ok := c.Get(CtxWorkspaceIDKey)
+	if !ok {
+		return "", false
+	}
+	id, ok := v.(string)
+	return id, ok
+}
+
 func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if repo == nil {
@@ -90,12 +108,23 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 				return
 			}
 
-			httpx.Error(c, http.StatusForbidden, "not a workspace member", nil)
+			httpx.Error(c, http.StatusForbidden, "not a workspace member", map[string]string{
+				"required": string(minRole),
+			})
 			c.Abort()
 			return
 		}
 
 		actual := Role(roleStr)
+		switch actual {
+		case RoleViewer, RoleMember, RoleOwner:
+			// valid role from DB
+		default:
+			httpx.Internal(c)
+			c.Abort()
+			return
+		}
+
 		if !RoleAtLeast(actual, minRole) {
 			httpx.Error(c, http.StatusForbidden, "insufficient role", map[string]string{
 				"required": string(minRole),
@@ -106,7 +135,7 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 		}
 
 		c.Set(CtxWorkspaceIDKey, workspaceID)
-		c.Set(CtxWorkspaceRoleKey, roleStr)
+		c.Set(CtxWorkspaceRoleKey, actual)
 
 		c.Next()
 	}

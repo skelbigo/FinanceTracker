@@ -18,5 +18,5 @@ COPY --from=build /app/api /app/api
 COPY migrations /app/migrations
 
 EXPOSE 8080
-
+STOPSIGNAL SIGTERM
 ENTRYPOINT ["/app/api"]

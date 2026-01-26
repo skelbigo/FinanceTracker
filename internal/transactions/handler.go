@@ -50,7 +50,11 @@ func UserIDFromCtx(c *gin.Context) (string, bool) {
 var currencyRe = regexp.MustCompile(`^[A-Z]{3}$`)
 
 func (h *Handler) create(c *gin.Context) {
-	workspaceID := c.Param("id")
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
 
 	userID, ok := UserIDFromCtx(c)
 	if !ok {
@@ -132,7 +136,11 @@ func (h *Handler) create(c *gin.Context) {
 }
 
 func (h *Handler) list(c *gin.Context) {
-	workspaceID := c.Param("id")
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
 
 	var f ListFilter
 

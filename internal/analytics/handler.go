@@ -20,7 +20,7 @@ func NewHandler(svc *Service, authMW gin.HandlerFunc, wsRepo workspaces.RoleProv
 	return &Handler{svc: svc, authMW: authMW, wsRepo: wsRepo}
 }
 
-func (h *Handler) RegisterRoutes(r *gin.Engine) {
+func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/workspaces/:id/analytics")
 	g.Use(h.authMW)
 	g.Use(workspaces.RequireWorkspaceRole(h.wsRepo, workspaces.RoleViewer))
