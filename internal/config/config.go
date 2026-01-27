@@ -120,7 +120,12 @@ func Load() (Config, error) {
 	cfg.JWTSecret = mustString("JWT_SECRET", &errs)
 
 	cfg.JWTAccessTTLMinutes = mustInt(getDefault("JWT_ACCESS_TTL_MINUTES", defaultJWTAccessTTLMinutes), "JWT_ACCESS_TTL_MINUTES", &errs)
-	cfg.RefreshTTLDays = mustInt(getDefault("REFRESH_TTL_DAYS", defaultRefreshTTLDays), "REFRESH_TTL_DAYS", &errs)
+	refreshRaw := strings.TrimSpace(os.Getenv("JWT_REFRESH_TTL_DAYS"))
+	if refreshRaw != "" {
+		cfg.RefreshTTLDays = mustInt(refreshRaw, "JWT_REFRESH_TTL_DAYS", &errs)
+	} else {
+		cfg.RefreshTTLDays = mustInt(getDefault("REFRESH_TTL_DAYS", defaultRefreshTTLDays), "REFRESH_TTL_DAYS", &errs)
+	}
 
 	cfg.BudgetsEnforceExpenseCategories = mustBool(
 		getDefault("BUDGETS_ENFORCE_EXPENSE_CATEGORIES", defaultBudgetsEnforceExpenseCategories),
@@ -132,7 +137,7 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES out of range: %d", cfg.JWTAccessTTLMinutes))
 	}
 	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
-		errs = append(errs, fmt.Errorf("REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
+		errs = append(errs, fmt.Errorf("JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
 	}
 	if cfg.DBPort <= 0 || cfg.DBPort > maxPort {
 		errs = append(errs, fmt.Errorf("DB_PORT out of range: %d", cfg.DBPort))

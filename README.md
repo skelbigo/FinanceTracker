@@ -24,10 +24,47 @@ This repository represents an MVP implementation intended as a pet project and a
 - **Infrastructure:** Docker, docker-compose
 - **Testing:** Unit and integration tests
 
+
 ## Project Status
 🚧 **MVP in active development**
 
 The initial goal is to deliver a stable and functional MVP covering core finance tracking features. Advanced features such as notifications, bank integrations, and full microservices separation are planned for future iterations.
+
+## Quickstart (local)
+
+### 1) Env
+```bash
+cp env.example .env
+```
+
+> .env is intentionally not committed (it's in .gitignore).
+
+### 2) Run with Docker
+```bash
+docker compose up --build
+```
+
+### 3) Migrations
+```bash
+make migrate
+```
+
+### 4) Tests
+```bash
+make test
+```
+
+### Run with Redis cache (optional)
+1) Enable cache in your `.env`:
+```bash
+REDIS_ENABLED=true
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+2) Start compose with the cache profile:
+```bash
+docker compose --profile cache up --build
+```
 
 ## License
 This project is licensed under the MIT License.
