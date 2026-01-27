@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/skelbigo/FinanceTracker/internal/web"
 	"net/http"
 	"time"
 )
@@ -57,6 +58,14 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	}
 
 	registerHealthRoutes(r, deps.Readiness, deps.StartedAt)
+
+	// Static assets (JS/CSS/images). Example: /static/htmx.min.js
+	r.Static("/static", "./web/static")
+
+	// Web (HTML) routes
+	webRenderer := web.NewRenderer("./web/templates")
+	webHandlers := &web.Handlers{R: webRenderer}
+	web.RegisterRoutes(r, webHandlers)
 
 	deps.Auth.RegisterRoutes(r)
 	deps.Workspaces.RegisterRoutes(r)

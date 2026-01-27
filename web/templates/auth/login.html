@@ -1,0 +1,38 @@
+{{ define "content" }}
+<div class="auth-wrap">
+  <div class="brand" aria-label="Finance Tracker">
+    <svg class="brand-mark" width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#00D2C6" />
+          <stop offset="1" stop-color="#20F2C8" />
+        </linearGradient>
+      </defs>
+      <rect x="6" y="8" width="22" height="10" rx="5" fill="url(#g)" opacity="0.95"/>
+      <rect x="6" y="18" width="28" height="10" rx="5" fill="url(#g)" opacity="0.85"/>
+      <rect x="6" y="28" width="18" height="10" rx="5" fill="url(#g)" opacity="0.75"/>
+    </svg>
+
+    <div class="brand-title">
+      <span class="brand-title-top">Finance</span>
+      <span class="brand-title-bottom">Tracker</span>
+    </div>
+  </div>
+
+  <section class="auth-card" aria-label="Sign in">
+    <form class="auth-form" action="/login" method="post">
+      <label class="sr-only" for="email">Email</label>
+      <input class="auth-input" id="email" name="email" type="email" placeholder="Email" autocomplete="email" required />
+
+      <label class="sr-only" for="password">Password</label>
+      <input class="auth-input" id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+
+      <button class="auth-button" type="submit">Sign In</button>
+    </form>
+  </section>
+
+  <p class="auth-alt">
+    Don't have an account? <a href="/register">Register</a>
+  </p>
+</div>
+{{ end }}

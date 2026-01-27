@@ -16,6 +16,7 @@ WORKDIR /app
 
 COPY --from=build /app/api /app/api
 COPY migrations /app/migrations
+COPY web /app/web
 
 EXPOSE 8080
 STOPSIGNAL SIGTERM

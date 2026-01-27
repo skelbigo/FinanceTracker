@@ -1,0 +1,16 @@
+{{ define "content" }}
+<section class="dash-wrap" aria-label="Dashboard">
+  {{ if .Kicker }}
+  <div class="dash-kicker">{{ .Kicker }}</div>
+  {{ end }}
+
+  <h1 class="dash-title">Dashboard</h1>
+  <p class="dash-subtitle">Here you will find brief statistics: expenses/income, budgets, recent transactions.</p>
+
+  <ul class="dash-links">
+    <li><a href="/app/transactions">Transactions</a></li>
+    <li><a href="/app/budgets">Budgets</a></li>
+    <li><a href="/app/analytics">Analytics</a></li>
+  </ul>
+</section>
+{{ end }}
