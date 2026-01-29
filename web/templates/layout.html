@@ -9,7 +9,7 @@
     <script src="/static/htmx.min.js" defer></script>
     <script src="/static/app.js" defer></script>
 </head>
-<body class="{{ .BodyClass }}">
+<body class="{{ .BodyClass }}" hx-headers='{"X-CSRF-Token":"{{ .CSRF }}"}'>
 {{ if not .HideHeader }}
 <header class="app-header">
     <div class="app-header-inner">
@@ -32,6 +32,7 @@
         </a>
 
         <form class="app-logout" action="/logout" method="post">
+            <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
             <button class="app-logout-btn" type="submit">Logout</button>
         </form>
     </div>

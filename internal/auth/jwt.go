@@ -52,3 +52,7 @@ func (m *JWTManager) ParseAndValidate(tokenStr string) (string, error) {
 	}
 	return claims.Subject, nil
 }
+
+func (m *JWTManager) Verify(tokenStr string) (string, error) {
+	return m.ParseAndValidate(tokenStr)
+}

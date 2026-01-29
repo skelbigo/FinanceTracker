@@ -12,6 +12,7 @@ import (
 
 const (
 	defaultAppPort = "8080"
+	defaultAppEnv  = "dev"
 
 	defaultDBHost    = "127.0.0.1"
 	defaultDBPort    = "5432"
@@ -22,6 +23,7 @@ const (
 
 	defaultJWTAccessTTLMinutes = "15"
 	defaultRefreshTTLDays      = "30"
+	defaultCSRFTTLMinutes      = "120"
 
 	defaultBudgetsEnforceExpenseCategories = "true"
 
@@ -36,8 +38,19 @@ func (c Config) RefreshTTL() time.Duration {
 	return time.Duration(c.RefreshTTLDays) * 24 * time.Hour
 }
 
+func (c Config) CSRFTTL() time.Duration {
+	return time.Duration(c.CSRFTTLMinutes) * time.Minute
+}
+
 type Config struct {
+	AppEnv  string
 	AppPort int
+
+	CookieDomain string
+	CookieSecure bool
+
+	CSRFSecret     string
+	CSRFTTLMinutes int
 
 	DBHost     string
 	DBPort     int
@@ -63,7 +76,30 @@ func Load() (Config, error) {
 	var cfg Config
 	var errs []error
 
+	cfg.AppEnv = strings.TrimSpace(getDefault("APP_ENV", defaultAppEnv))
+	validateOneOf("APP_ENV", cfg.AppEnv, []string{"dev", "prod", "test"}, &errs)
+
 	cfg.AppPort = mustInt(getDefault("APP_PORT", defaultAppPort), "APP_PORT", &errs)
+
+	cfg.CookieDomain = strings.TrimSpace(os.Getenv("COOKIE_DOMAIN"))
+
+	cookieSecureRaw := strings.TrimSpace(os.Getenv("COOKIE_SECURE"))
+	if cookieSecureRaw == "" {
+		cfg.CookieSecure = cfg.AppEnv == "prod"
+	} else {
+		v, _, err := parseBoolOptional(cookieSecureRaw, "COOKIE_SECURE")
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			cfg.CookieSecure = v
+		}
+	}
+	if cfg.AppEnv == "prod" && !cfg.CookieSecure {
+		errs = append(errs, fmt.Errorf("COOKIE_SECURE must be true when APP_ENV=prod (HTTPS)"))
+	}
+
+	cfg.CSRFSecret = mustString("CSRF_SECRET", &errs)
+	cfg.CSRFTTLMinutes = mustInt(getDefault("CSRF_TTL_MINUTES", defaultCSRFTTLMinutes), "CSRF_TTL_MINUTES", &errs)
 
 	cfg.DBURL = strings.TrimSpace(os.Getenv("DB_URL"))
 	cfg.DBHost = getDefault("DB_HOST", defaultDBHost)
@@ -135,6 +171,9 @@ func Load() (Config, error) {
 
 	if cfg.JWTAccessTTLMinutes <= 0 || cfg.JWTAccessTTLMinutes > 24*60 {
 		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES out of range: %d", cfg.JWTAccessTTLMinutes))
+	}
+	if cfg.CSRFTTLMinutes <= 0 || cfg.CSRFTTLMinutes > 24*60 {
+		errs = append(errs, fmt.Errorf("CSRF_TTL_MINUTES out of range: %d", cfg.CSRFTTLMinutes))
 	}
 	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
 		errs = append(errs, fmt.Errorf("JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))

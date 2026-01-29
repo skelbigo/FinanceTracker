@@ -10,6 +10,7 @@ import (
 func unsetConfigEnv(t *testing.T) {
 	t.Helper()
 	keys := []string{
+		"APP_ENV",
 		"APP_PORT",
 		"DB_URL",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE",
@@ -17,6 +18,10 @@ func unsetConfigEnv(t *testing.T) {
 		"JWT_SECRET",
 		"JWT_ACCESS_TTL_MINUTES",
 		"REFRESH_TTL_DAYS",
+		"COOKIE_DOMAIN",
+		"COOKIE_SECURE",
+		"CSRF_SECRET",
+		"CSRF_TTL_MINUTES",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")
@@ -32,7 +37,7 @@ func TestLoad_MissingRequired(t *testing.T) {
 	}
 
 	msg := err.Error()
-	want := []string{"DB_USER", "DB_PASSWORD", "DB_NAME", "JWT_SECRET"}
+	want := []string{"DB_USER", "DB_PASSWORD", "DB_NAME", "JWT_SECRET", "CSRF_SECRET"}
 	for _, k := range want {
 		if !strings.Contains(msg, k) {
 			t.Fatalf("expected error to mention %q, got: %s", k, msg)
@@ -53,6 +58,7 @@ func TestLoad_InvalidDBPort(t *testing.T) {
 	t.Setenv("DB_SSLMODE", "disable")
 
 	t.Setenv("JWT_SECRET", "dev_secret")
+	t.Setenv("CSRF_SECRET", "csrf_dev_secret")
 
 	_, err := config.Load()
 	if err == nil {
@@ -76,6 +82,7 @@ func TestLoad_OK(t *testing.T) {
 	t.Setenv("DB_SSLMODE", "disable")
 
 	t.Setenv("JWT_SECRET", "dev_secret")
+	t.Setenv("CSRF_SECRET", "csrf_dev_secret")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -93,6 +100,7 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	t.Setenv("DB_PASSWORD", "postgres")
 	t.Setenv("DB_NAME", "financetracker")
 	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("CSRF_SECRET", "csrf_dev")
 
 	cfg, err := config.Load()
 	if err != nil {

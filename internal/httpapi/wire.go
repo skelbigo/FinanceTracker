@@ -8,6 +8,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/config"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
+	"github.com/skelbigo/FinanceTracker/internal/web"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"time"
 )
@@ -15,6 +16,10 @@ import (
 func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) RouterDeps {
 	accessTTL := cfg.AccessTTL()
 	refreshTTL := cfg.RefreshTTL()
+	resetTTL := 30 * time.Minute
+	returnResetToken := cfg.AppEnv != "prod"
+
+	cookieCfg := web.CookieConfig{Domain: cfg.CookieDomain, Secure: cfg.CookieSecure}
 
 	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessTTL)
 	authMW := auth.AuthRequired(jwtMgr)
@@ -23,7 +28,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	// auth
 	authRepo := auth.NewRepo(pool)
-	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL)
+	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL, resetTTL, returnResetToken)
 	authH := auth.NewHandler(authSvc, authMW)
 
 	// workspaces
@@ -54,6 +59,15 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	return RouterDeps{
 		Readiness: pool,
 		StartedAt: startedAt,
+
+		JWTM:       jwtMgr,
+		AuthSvc:    authSvc,
+		AccessTTL:  accessTTL,
+		RefreshTTL: refreshTTL,
+		CookieCfg:  cookieCfg,
+
+		CSRFSecret: cfg.CSRFSecret,
+		CSRFTTL:    cfg.CSRFTTL(),
 
 		Auth:         authH,
 		Workspaces:   wsH,

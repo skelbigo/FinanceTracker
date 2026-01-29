@@ -21,6 +21,7 @@
 
   <section class="auth-card" aria-label="Sign in">
     <form class="auth-form" action="/login" method="post">
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
       <label class="sr-only" for="email">Email</label>
       <input class="auth-input" id="email" name="email" type="email" placeholder="Email" autocomplete="email" required />
 
@@ -33,6 +34,10 @@
 
   <p class="auth-alt">
     Don't have an account? <a href="/register">Register</a>
+  </p>
+
+  <p class="auth-alt">
+    Forgot password? <a href="/reset/request">Reset it</a>
   </p>
 </div>
 {{ end }}

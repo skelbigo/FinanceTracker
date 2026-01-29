@@ -1,19 +1,44 @@
 package web
 
-import "github.com/gin-gonic/gin"
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/skelbigo/FinanceTracker/internal/auth"
+)
 
 type Handlers struct {
 	R *Renderer
+
+	Auth *auth.Service
+	JWTM *auth.JWTManager
+
+	CookieCfg  CookieConfig
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+
+	CSRFSecret string
+	CSRFTTL    time.Duration
 }
 
 func RegisterRoutes(router *gin.Engine, h *Handlers) {
-	router.GET("/login", h.GetLogin)
-	router.POST("/login", h.PostLogin)
+	webGroup := router.Group("/")
+	webGroup.Use(CSRFMiddleware(h.CSRFSecret))
 
-	router.GET("/register", h.GetRegister)
-	router.POST("/register", h.PostRegister)
+	webGroup.GET("/login", h.GetLogin)
+	webGroup.POST("/login", h.PostLogin)
 
-	router.POST("/logout", h.PostLogout)
+	webGroup.GET("/reset/request", h.GetResetRequest)
+	webGroup.POST("/reset/request", h.PostResetRequest)
+	webGroup.GET("/reset/confirm", h.GetResetConfirm)
+	webGroup.POST("/reset/confirm", h.PostResetConfirm)
 
-	router.GET("/app", h.GetDashboard)
+	webGroup.GET("/register", h.GetRegister)
+	webGroup.POST("/register", h.PostRegister)
+
+	webGroup.POST("/logout", h.PostLogout)
+
+	app := webGroup.Group("/app")
+	app.Use(RequireAuth(h.JWTM, h.Auth, h.CookieCfg, h.AccessTTL, h.RefreshTTL))
+	app.GET("", h.GetDashboard)
 }

@@ -11,5 +11,7 @@
     <file url="file://$PROJECT_DIR$/migrations/004_categories.up.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/005_transactions.up.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/006_budgets.up.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/migrations/008_password_reset_tokens.down.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/migrations/008_password_reset_tokens.up.sql" dialect="GenericSQL" />
   </component>
 </project>

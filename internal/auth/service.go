@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"strings"
 	"time"
 )
@@ -13,15 +14,83 @@ type JWT interface {
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 var ErrInvalidRefreshToken = errors.New("invalid refresh token")
+var ErrInvalidResetToken = errors.New("invalid reset token")
 
 type Service struct {
-	repo       *Repo
-	jwt        JWT
-	refreshTTL time.Duration
+	repo             *Repo
+	jwt              JWT
+	refreshTTL       time.Duration
+	resetTTL         time.Duration
+	returnResetToken bool
 }
 
-func NewService(repo *Repo, jwt JWT, refreshTTL time.Duration) *Service {
-	return &Service{repo: repo, jwt: jwt, refreshTTL: refreshTTL}
+func NewService(repo *Repo, jwt JWT, refreshTTL, resetTTL time.Duration, returnResetToken bool) *Service {
+	return &Service{
+		repo:             repo,
+		jwt:              jwt,
+		refreshTTL:       refreshTTL,
+		resetTTL:         resetTTL,
+		returnResetToken: returnResetToken,
+	}
+}
+
+func (s *Service) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "", errors.New("email is required")
+	}
+
+	u, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	plainToken, err := GenerateResetToken()
+	if err != nil {
+		return "", err
+	}
+	h := HashResetToken(plainToken)
+	expiresAt := time.Now().Add(s.resetTTL)
+	if err := s.repo.InsertPasswordResetToken(ctx, u.ID, h, expiresAt); err != nil {
+		return "", err
+	}
+
+	if s.returnResetToken {
+		return plainToken, nil
+	}
+	return "", nil
+}
+
+func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+	token = strings.TrimSpace(token)
+	newPassword = strings.TrimSpace(newPassword)
+	if token == "" {
+		return errors.New("token is required")
+	}
+	if len(newPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	h := HashResetToken(token)
+	userID, ok, err := s.repo.ConsumePasswordResetToken(ctx, h)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidResetToken
+	}
+
+	passHash, err := HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.UpdateUserPassword(ctx, userID, passHash); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterResponse, error) {

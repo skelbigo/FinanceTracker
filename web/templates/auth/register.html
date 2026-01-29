@@ -21,6 +21,7 @@
 
   <section class="auth-card" aria-label="Create account">
     <form class="auth-form" action="/register" method="post">
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
       <label class="sr-only" for="name">Name</label>
       <input class="auth-input" id="name" name="name" placeholder="Name" autocomplete="name" required />
 

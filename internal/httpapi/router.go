@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/web"
 	"net/http"
 	"time"
@@ -25,6 +26,15 @@ type ReadinessChecker interface {
 type RouterDeps struct {
 	Readiness ReadinessChecker
 	StartedAt time.Time
+
+	JWTM       *auth.JWTManager
+	AuthSvc    *auth.Service
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+	CookieCfg  web.CookieConfig
+
+	CSRFSecret string
+	CSRFTTL    time.Duration
 
 	Auth         RoutesRegistrar
 	Workspaces   RoutesRegistrar
@@ -59,12 +69,21 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 
 	registerHealthRoutes(r, deps.Readiness, deps.StartedAt)
 
-	// Static assets (JS/CSS/images). Example: /static/htmx.min.js
 	r.Static("/static", "./web/static")
 
-	// Web (HTML) routes
 	webRenderer := web.NewRenderer("./web/templates")
-	webHandlers := &web.Handlers{R: webRenderer}
+	webHandlers := &web.Handlers{
+		R: webRenderer,
+
+		Auth:       deps.AuthSvc,
+		JWTM:       deps.JWTM,
+		CookieCfg:  deps.CookieCfg,
+		AccessTTL:  deps.AccessTTL,
+		RefreshTTL: deps.RefreshTTL,
+
+		CSRFSecret: deps.CSRFSecret,
+		CSRFTTL:    deps.CSRFTTL,
+	}
 	web.RegisterRoutes(r, webHandlers)
 
 	deps.Auth.RegisterRoutes(r)

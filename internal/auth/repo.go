@@ -49,6 +49,35 @@ VALUES ($1::uuid, $2, $3, NULL)
 	return err
 }
 
+func (r *Repo) InsertPasswordResetToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
+	const q = `
+INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, used_at)
+VALUES ($1::uuid, $2, $3, NULL)
+`
+	_, err := r.db.Exec(ctx, q, userID, tokenHash, expiresAt)
+	return err
+}
+
+func (r *Repo) ConsumePasswordResetToken(ctx context.Context, tokenHash string) (string, bool, error) {
+	const q = `
+UPDATE password_reset_tokens
+SET used_at = NOW()
+WHERE token_hash = $1
+	AND used_at IS NULL
+	AND EXPIRES_AT > NOW()
+RETURNING user_id::text
+`
+	var userID string
+	err := r.db.QueryRow(ctx, q, tokenHash).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return userID, true, nil
+}
+
 func (r *Repo) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	const q = `
 SELECT id::text, email, password_hash, name, created_at
@@ -107,6 +136,22 @@ WHERE id = $1::uuid
 		return User{}, err
 	}
 	return u, nil
+}
+
+func (r *Repo) UpdateUserPassword(ctx context.Context, userID, passwordHash string) error {
+	const q = `
+UPDATE users
+SET password_hash = $2
+WHERE id = $1::uuid
+`
+	cmd, err := r.db.Exec(ctx, q, userID, passwordHash)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 func (r *Repo) RotateRefreshToken(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (string, bool, error) {
