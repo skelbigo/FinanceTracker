@@ -11,3 +11,13 @@ func (h *Handlers) render(c *gin.Context, page string, data gin.H) {
 	}
 	h.R.Render(c, page, data)
 }
+
+func (h *Handlers) renderPartial(c *gin.Context, tmplName string, data gin.H) {
+	if data == nil {
+		data = gin.H{}
+	}
+	if _, ok := data["CSRF"]; !ok {
+		data["CSRF"] = GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
+	}
+	h.R.RenderPartial(c, tmplName, data)
+}

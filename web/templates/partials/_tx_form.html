@@ -1,0 +1,35 @@
+{{ define "tx_form" }}
+<form id="tx-form"
+      hx-post="/app/transactions"
+      hx-target="#tx-tbody"
+      hx-swap="afterbegin">
+
+  <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+    <select name="type" required>
+      <option value="">Type</option>
+      <option value="income">Income</option>
+      <option value="expense">Expense</option>
+    </select>
+
+    <input name="amount" type="text" placeholder="Amount (e.g. 12.34)" required>
+
+    <input name="currency" value="{{ .DefaultCurrency }}" maxlength="3" required style="width: 90px;">
+
+    <input name="occurred_at" type="date" required>
+
+    <select name="category_id">
+      <option value="">No category</option>
+      {{ range .Categories }}
+      <option value="{{ .ID }}">{{ .Name }}</option>
+      {{ end }}
+    </select>
+
+    <input name="tags" placeholder="tag1, tag2" style="min-width: 180px;">
+    <input name="note" placeholder="Note" style="min-width: 220px;">
+
+    <button type="submit">Add</button>
+  </div>
+</form>
+{{ end }}

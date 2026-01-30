@@ -4,7 +4,10 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/categories"
+	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
+	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"net/http"
 	"time"
 )
@@ -35,6 +38,10 @@ type RouterDeps struct {
 
 	CSRFSecret string
 	CSRFTTL    time.Duration
+
+	WorkspacesSvc   *workspaces.Service
+	CategoriesSvc   *categories.Service
+	TransactionsSvc *transactions.Service
 
 	Auth         RoutesRegistrar
 	Workspaces   RoutesRegistrar
@@ -75,11 +82,14 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	webHandlers := &web.Handlers{
 		R: webRenderer,
 
-		Auth:       deps.AuthSvc,
-		JWTM:       deps.JWTM,
-		CookieCfg:  deps.CookieCfg,
-		AccessTTL:  deps.AccessTTL,
-		RefreshTTL: deps.RefreshTTL,
+		Auth:         deps.AuthSvc,
+		Workspaces:   deps.WorkspacesSvc,
+		Categories:   deps.CategoriesSvc,
+		Transactions: deps.TransactionsSvc,
+		JWTM:         deps.JWTM,
+		CookieCfg:    deps.CookieCfg,
+		AccessTTL:    deps.AccessTTL,
+		RefreshTTL:   deps.RefreshTTL,
 
 		CSRFSecret: deps.CSRFSecret,
 		CSRFTTL:    deps.CSRFTTL,

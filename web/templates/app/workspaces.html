@@ -1,0 +1,60 @@
+{{ define "content" }}
+<section style="max-width: 900px; margin: 0 auto; padding: 24px;">
+  <h1 style="margin: 0 0 12px 0;">Workspaces</h1>
+  <p style="margin: 0 0 18px 0; opacity: 0.9;">Here you can create and view your workspaces. The current workspace will be saved in a cookie <code>current_workspace</code>.</p>
+
+  <div style="border: 1px solid #222; border-radius: 14px; padding: 16px; margin-bottom: 18px;">
+    <h2 style="margin: 0 0 12px 0; font-size: 18px;">Create workspace</h2>
+    <form action="/app/workspaces" method="post" style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+
+      <label style="display: grid; gap: 6px;">
+        <span style="font-size: 13px; opacity: 0.9;">Name</span>
+        <input name="name" required placeholder="E.g. Family" style="padding: 9px 10px; border-radius: 10px; border: 1px solid #333; min-width: 240px;" />
+      </label>
+
+      <label style="display: grid; gap: 6px;">
+        <span style="font-size: 13px; opacity: 0.9;">Default currency</span>
+        <input name="default_currency" maxlength="3" placeholder="UAH" style="padding: 9px 10px; border-radius: 10px; border: 1px solid #333; width: 110px;" />
+      </label>
+
+      <button type="submit" style="padding: 10px 14px; border: 1px solid #ddd; border-radius: 10px; background: transparent; cursor: pointer;">
+        Create
+      </button>
+    </form>
+  </div>
+
+  <div style="border: 1px solid #222; border-radius: 14px; padding: 16px;">
+    <h2 style="margin: 0 0 12px 0; font-size: 18px;">My workspaces</h2>
+
+    {{ if .Items }}
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+      <tr style="text-align: left;">
+        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Name</th>
+        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Role</th>
+        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Status</th>
+      </tr>
+      </thead>
+      <tbody>
+      {{ range .Items }}
+      <tr>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">{{ .Name }}</td>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">{{ .Role }}</td>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">
+          {{ if eq $.CurrentID .ID }}
+          <span style="padding: 3px 8px; border: 1px solid #ddd; border-radius: 999px;">Current</span>
+          {{ else }}
+          <span style="opacity: 0.7;">—</span>
+          {{ end }}
+        </td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <p style="margin: 0; opacity: 0.9;">There are no workspaces yet. Create the first one </p>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

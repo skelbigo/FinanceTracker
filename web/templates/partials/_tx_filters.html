@@ -1,0 +1,42 @@
+{{ define "tx_filters" }}
+<form id="tx-filters"
+      hx-get="/app/transactions/table"
+      hx-trigger="change, keyup delay:300ms"
+      hx-target="#tx-tbody"
+      hx-swap="innerHTML"
+      hx-push-url="true">
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+    <input type="date" name="from" value="{{ .Filters.From }}" placeholder="From">
+    <input type="date" name="to" value="{{ .Filters.To }}" placeholder="To">
+
+    <select name="type">
+      <option value="">All types</option>
+      <option value="income" {{ if eq .Filters.Type "income" }}selected{{ end }}>Income</option>
+      <option value="expense" {{ if eq .Filters.Type "expense" }}selected{{ end }}>Expense</option>
+    </select>
+
+    <select name="category_id">
+      <option value="">All categories</option>
+      {{ range .Categories }}
+      <option value="{{ .ID }}" {{ if eq $.Filters.CategoryID .ID }}selected{{ end }}>{{ .Name }}</option>
+      {{ end }}
+    </select>
+
+    <input name="q" placeholder="Search note/tag..." value="{{ .Filters.Q }}">
+
+    <select name="sort">
+      <option value="occurred_at_desc" {{ if or (eq .Filters.Sort "") (eq .Filters.Sort "occurred_at_desc") }}selected{{ end }}>Newest</option>
+      <option value="occurred_at_asc" {{ if eq .Filters.Sort "occurred_at_asc" }}selected{{ end }}>Oldest</option>
+      <option value="amount_desc" {{ if eq .Filters.Sort "amount_desc" }}selected{{ end }}>Amount ↓</option>
+      <option value="amount_asc" {{ if eq .Filters.Sort "amount_asc" }}selected{{ end }}>Amount ↑</option>
+    </select>
+
+    <select name="limit">
+      <option value="10" {{ if eq .Filters.Limit 10 }}selected{{ end }}>10</option>
+      <option value="20" {{ if eq .Filters.Limit 20 }}selected{{ end }}>20</option>
+      <option value="50" {{ if eq .Filters.Limit 50 }}selected{{ end }}>50</option>
+    </select>
+  </div>
+</form>
+{{ end }}

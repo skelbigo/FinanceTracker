@@ -8,9 +8,12 @@ import (
 )
 
 const (
-	AccessCookie  = "access_token"
-	RefreshCookie = "refresh_token"
+	AccessCookie           = "access_token"
+	RefreshCookie          = "refresh_token"
+	CurrentWorkspaceCookie = "current_workspace"
 )
+
+const currentWorkspaceCookieMaxAgeDays = 180
 
 type CookieConfig struct {
 	Domain string
@@ -67,6 +70,38 @@ func clearAuthCookies(c *gin.Context, cfg CookieConfig) {
 	})
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     RefreshCookie,
+		Value:    "",
+		Path:     "/",
+		Domain:   cfg.Domain,
+		MaxAge:   -1,
+		Expires:  exp,
+		Secure:   cfg.Secure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func setCurrentWorkspaceCookie(c *gin.Context, cfg CookieConfig, workspaceID string) {
+	maxAge := int((currentWorkspaceCookieMaxAgeDays * 24 * time.Hour).Seconds())
+	exp := time.Now().Add(time.Duration(currentWorkspaceCookieMaxAgeDays) * 24 * time.Hour)
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     CurrentWorkspaceCookie,
+		Value:    workspaceID,
+		Path:     "/",
+		Domain:   cfg.Domain,
+		MaxAge:   maxAge,
+		Expires:  exp,
+		Secure:   cfg.Secure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearCurrentWorkspaceCookie(c *gin.Context, cfg CookieConfig) {
+	exp := time.Unix(0, 0)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     CurrentWorkspaceCookie,
 		Value:    "",
 		Path:     "/",
 		Domain:   cfg.Domain,

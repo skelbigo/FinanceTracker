@@ -1,0 +1,25 @@
+{{ define "tx_pagination_oob" }}
+<div id="tx-pagination" hx-swap-oob="true" style="margin-top: 12px; display: flex; align-items: center; gap: 10px;">
+  {{ if .Pagination.ShowPrev }}
+  <button type="button"
+          hx-get="/app/transactions/table"
+          hx-target="#tx-tbody"
+          hx-swap="innerHTML"
+          hx-include="#tx-filters"
+          hx-vals='{"offset":{{ .Pagination.PrevOffset }} }'
+          hx-push-url="true">Prev</button>
+  {{ end }}
+
+  <span style="opacity: 0.85;">{{ .Pagination.Info }}</span>
+
+  {{ if .Pagination.ShowNext }}
+  <button type="button"
+          hx-get="/app/transactions/table"
+          hx-target="#tx-tbody"
+          hx-swap="innerHTML"
+          hx-include="#tx-filters"
+          hx-vals='{"offset":{{ .Pagination.NextOffset }} }'
+          hx-push-url="true">Next</button>
+  {{ end }}
+</div>
+{{ end }}

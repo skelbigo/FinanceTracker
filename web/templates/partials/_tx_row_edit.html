@@ -1,0 +1,45 @@
+{{ define "tx_row_edit" }}
+<tr id="tx-{{ .Row.ID }}">
+  <td><input form="tx-edit-form-{{ .Row.ID }}" name="occurred_at" type="date" value="{{ .Row.Occurred }}" required></td>
+  <td>
+    <select form="tx-edit-form-{{ .Row.ID }}" name="type" required>
+      <option value="income" {{ if eq .Row.Type "income" }}selected{{ end }}>Income</option>
+      <option value="expense" {{ if eq .Row.Type "expense" }}selected{{ end }}>Expense</option>
+    </select>
+  </td>
+  <td>
+    <select form="tx-edit-form-{{ .Row.ID }}" name="category_id">
+      <option value="">No category</option>
+      {{ range .Categories }}
+      <option value="{{ .ID }}" {{ if eq $.Row.CategoryID .ID }}selected{{ end }}>{{ .Name }}</option>
+      {{ end }}
+    </select>
+  </td>
+  <td>
+    <input form="tx-edit-form-{{ .Row.ID }}" name="amount" type="text" value="{{ .Row.Amount }}" required style="width: 120px;">
+    <input form="tx-edit-form-{{ .Row.ID }}" name="currency" type="text" value="{{ .Row.Currency }}" maxlength="3" required style="width: 70px;">
+  </td>
+  <td>
+    <input form="tx-edit-form-{{ .Row.ID }}" name="note" type="text" value="{{ .Row.Note }}" placeholder="Note" style="width: 180px;">
+    <div style="margin-top: 6px;">
+      <input form="tx-edit-form-{{ .Row.ID }}" name="tags" type="text" value="{{ .Row.Tags }}" placeholder="tag1, tag2" style="width: 160px;">
+    </div>
+  </td>
+  <td>
+    <form id="tx-edit-form-{{ .Row.ID }}"
+          hx-post="/app/transactions/{{ .Row.ID }}/update"
+          hx-target="#tx-{{ .Row.ID }}"
+          hx-swap="outerHTML"
+          method="post"
+          style="margin: 0; display: inline-flex; gap: 8px; align-items: center;">
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+      <button type="submit">Save</button>
+      <button type="button"
+              hx-get="/app/transactions/table"
+              hx-target="#tx-tbody"
+              hx-swap="innerHTML"
+              hx-include="#tx-filters">Cancel</button>
+    </form>
+  </td>
+</tr>
+{{ end }}

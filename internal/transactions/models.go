@@ -5,8 +5,11 @@ import "time"
 type Type string
 
 const (
-	typeIncome  Type = "income"
-	typeExpense Type = "expense"
+	TypeIncome  Type = "income"
+	TypeExpense Type = "expense"
+
+	typeIncome  = TypeIncome
+	typeExpense = TypeExpense
 )
 
 type Transaction struct {
@@ -19,6 +22,7 @@ type Transaction struct {
 	Currency    string    `json:"currency"`
 	OccurredAt  time.Time `json:"occurred_at"`
 	Note        *string   `json:"note,omitempty"`
+	Tags        []string  `json:"tags,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

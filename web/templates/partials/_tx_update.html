@@ -1,0 +1,16 @@
+{{ define "tx_update_response" }}
+<div id="tx-form-errors" hx-swap-oob="true"></div>
+{{ template "tx_row" .Row }}
+{{ end }}
+
+{{ define "tx_update_error" }}
+<div id="tx-form-errors" hx-swap-oob="true">
+  {{ range .Errors }}
+  <div class="flash">{{ . }}</div>
+  {{ else }}
+  {{/* no errors */}}
+  {{ end }}
+</div>
+
+{{ template "tx_row_edit" . }}
+{{ end }}

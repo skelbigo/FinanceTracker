@@ -1,0 +1,9 @@
+{{ define "tx_tbody" }}
+{{ range .Items }}
+{{ template "tx_row" . }}
+{{ else }}
+<tr><td colspan="6">No transactions</td></tr>
+{{ end }}
+
+{{ template "tx_pagination_oob" . }}
+{{ end }}

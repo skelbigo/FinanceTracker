@@ -69,6 +69,10 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		CSRFSecret: cfg.CSRFSecret,
 		CSRFTTL:    cfg.CSRFTTL(),
 
+		WorkspacesSvc:   wsSvc,
+		CategoriesSvc:   catSvc,
+		TransactionsSvc: txSvc,
+
 		Auth:         authH,
 		Workspaces:   wsH,
 		Categories:   catH,
