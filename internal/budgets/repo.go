@@ -2,6 +2,9 @@ package budgets
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,6 +31,76 @@ RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, c
 	err := r.db.QueryRow(ctx, q, workspaceID, req.CategoryID, req.Period, req.AmountLimitMinor, req.Currency).
 		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return Budget{}, ErrBudgetExists
+			}
+		}
+		return Budget{}, err
+	}
+	return b, nil
+}
+
+func (r *Repo) UpdateBudget(ctx context.Context, workspaceID, budgetID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
+	const q = `
+UPDATE budgets
+SET category_id = $3,
+    period = $4,
+    amount_limit_minor = $5,
+    currency = $6,
+    updated_at = now()
+WHERE workspace_id = $1 AND id = $2
+RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, updated_at;
+`
+	var b Budget
+	err := r.db.QueryRow(ctx, q, workspaceID, budgetID, req.CategoryID, req.Period, req.AmountLimitMinor, req.Currency).
+		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Budget{}, ErrBudgetNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return Budget{}, ErrBudgetExists
+			}
+		}
+		return Budget{}, err
+	}
+	return b, nil
+}
+
+func (r *Repo) DeleteBudget(ctx context.Context, workspaceID, budgetID uuid.UUID) error {
+	const q = `
+DELETE FROM budgets
+WHERE workspace_id = $1 AND id = $2
+`
+	ct, err := r.db.Exec(ctx, q, workspaceID, budgetID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrBudgetNotFound
+	}
+	return nil
+}
+
+func (r *Repo) GetBudgetByID(ctx context.Context, workspaceID, budgetID uuid.UUID) (Budget, error) {
+	const q = `
+SELECT id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at
+FROM budgets
+WHERE workspace_id = $1 AND id = $2
+`
+	var b Budget
+	err := r.db.QueryRow(ctx, q, workspaceID, budgetID).Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period,
+		&b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Budget{}, ErrBudgetNotFound
+		}
 		return Budget{}, err
 	}
 	return b, nil

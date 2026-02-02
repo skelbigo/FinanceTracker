@@ -27,9 +27,21 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer),
 		h.listBudgets,
 	)
+	wsg.GET("/budgets/:budgetId",
+		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer),
+		h.getBudget,
+	)
 	wsg.PUT("/budgets",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
 		h.upsertBudget,
+	)
+	wsg.PUT("/budgets/:budgetId",
+		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
+		h.updateBudget,
+	)
+	wsg.DELETE("/budgets/:budgetId",
+		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
+		h.deleteBudget,
 	)
 }
 
@@ -74,6 +86,68 @@ func (h *Handler) listBudgets(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
+func (h *Handler) getBudget(c *gin.Context) {
+	workspaceID, ok := parseWorkspaceUUID(c)
+	if !ok {
+		return
+	}
+	budgetID, ok := parseBudgetUUID(c)
+	if !ok {
+		return
+	}
+
+	item, err := h.svc.GetByID(c.Request.Context(), workspaceID, budgetID)
+	if err != nil {
+		respondErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, item)
+}
+
+func (h *Handler) updateBudget(c *gin.Context) {
+	workspaceID, ok := parseWorkspaceUUID(c)
+	if !ok {
+		return
+	}
+	budgetID, ok := parseBudgetUUID(c)
+	if !ok {
+		return
+	}
+
+	var req UpsertBudgetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpx.BadRequest(c, "invalid request body", map[string]string{"body": "must be valid json"})
+		return
+	}
+
+	res, err := h.svc.Update(c.Request.Context(), workspaceID, budgetID, req)
+	if err != nil {
+		respondErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+func (h *Handler) deleteBudget(c *gin.Context) {
+	workspaceID, ok := parseWorkspaceUUID(c)
+	if !ok {
+		return
+	}
+	budgetID, ok := parseBudgetUUID(c)
+	if !ok {
+		return
+	}
+
+	if err := h.svc.Delete(c.Request.Context(), workspaceID, budgetID); err != nil {
+		respondErr(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func respondErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidPeriod),
@@ -90,6 +164,14 @@ func respondErr(c *gin.Context, err error) {
 
 	case errors.Is(err, ErrCategoryNotExpense):
 		httpx.Error(c, http.StatusUnprocessableEntity, "category is not expense", nil)
+		return
+
+	case errors.Is(err, ErrBudgetExists):
+		httpx.Conflict(c, "budget already exists")
+		return
+
+	case errors.Is(err, ErrBudgetNotFound):
+		httpx.Error(c, http.StatusNotFound, "budget not found", nil)
 		return
 
 	default:

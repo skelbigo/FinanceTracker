@@ -52,3 +52,25 @@ func parseOptionalPeriodQuery(c *gin.Context) (*Period, bool) {
 	}
 	return &p, true
 }
+
+func parseBudgetUUID(c *gin.Context) (uuid.UUID, bool) {
+	raw := c.Param("budgetId")
+	if raw == "" {
+		raw = c.Param("budget_id")
+	}
+	if raw == "" {
+		raw = c.Param("budgetID")
+	}
+	if raw == "" {
+		httpx.BadRequest(c, "missing budget id", map[string]string{"budgetId": "required"})
+		return uuid.UUID{}, false
+	}
+
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		httpx.BadRequest(c, "invalid budgetId id", map[string]string{"budgetId": "must be uuid"})
+		return uuid.UUID{}, false
+	}
+
+	return id, true
+}
