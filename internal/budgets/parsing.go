@@ -1,7 +1,7 @@
 package budgets
 
 import (
-	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -40,29 +40,15 @@ func parseWorkspaceUUID(c *gin.Context) (uuid.UUID, bool) {
 	return id, true
 }
 
-func parseYearMonthQuery(c *gin.Context) (int, int, bool) {
-	yearStr := c.Query("year")
-	monthStr := c.Query("month")
-
-	if yearStr == "" || monthStr == "" {
-		httpx.BadRequest(c, "missing query params", map[string]string{
-			"year":  "required",
-			"month": "required",
-		})
-		return 0, 0, false
+func parseOptionalPeriodQuery(c *gin.Context) (*Period, bool) {
+	raw := strings.TrimSpace(strings.ToLower(c.Query("period")))
+	if raw == "" {
+		return nil, true
 	}
-
-	year, err := strconv.Atoi(yearStr)
-	if err != nil {
-		httpx.BadRequest(c, "invalid query params", map[string]string{"year": "must be int"})
-		return 0, 0, false
+	p := Period(raw)
+	if !p.IsValid() {
+		httpx.BadRequest(c, "invalid query params", map[string]string{"period": "must be week or month"})
+		return nil, false
 	}
-
-	month, err := strconv.Atoi(monthStr)
-	if err != nil {
-		httpx.BadRequest(c, "invalid query params", map[string]string{"month": "must be int"})
-		return 0, 0, false
-	}
-
-	return year, month, true
+	return &p, true
 }

@@ -3,9 +3,9 @@ package budgets
 import "errors"
 
 var (
-	ErrInvalidYear        = errors.New("invalid year")
-	ErrInvalidMonth       = errors.New("invalid month")
-	ErrInvalidAmount      = errors.New("invalid amount")
+	ErrInvalidPeriod      = errors.New("invalid period")
+	ErrInvalidLimit       = errors.New("invalid limit")
+	ErrInvalidCurrency    = errors.New("invalid currency")
 	ErrCategoryNotFound   = errors.New("category not found in workspace")
 	ErrCategoryNotExpense = errors.New("category is not expense")
 )

@@ -25,7 +25,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	wsg := g.Group("/:id")
 	wsg.GET("/budgets",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer),
-		h.listBudgetsByMonth,
+		h.listBudgets,
 	)
 	wsg.PUT("/budgets",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
@@ -54,18 +54,18 @@ func (h *Handler) upsertBudget(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func (h *Handler) listBudgetsByMonth(c *gin.Context) {
+func (h *Handler) listBudgets(c *gin.Context) {
 	workspaceID, ok := parseWorkspaceUUID(c)
 	if !ok {
 		return
 	}
 
-	year, month, ok := parseYearMonthQuery(c)
+	period, ok := parseOptionalPeriodQuery(c)
 	if !ok {
 		return
 	}
 
-	items, err := h.svc.GetBudgetsForMonth(c.Request.Context(), workspaceID, year, month)
+	items, err := h.svc.ListBudgets(c.Request.Context(), workspaceID, period)
 	if err != nil {
 		respondErr(c, err)
 		return
@@ -76,9 +76,9 @@ func (h *Handler) listBudgetsByMonth(c *gin.Context) {
 
 func respondErr(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, ErrInvalidYear),
-		errors.Is(err, ErrInvalidMonth),
-		errors.Is(err, ErrInvalidAmount):
+	case errors.Is(err, ErrInvalidPeriod),
+		errors.Is(err, ErrInvalidLimit),
+		errors.Is(err, ErrInvalidCurrency):
 		httpx.Error(c, http.StatusBadRequest, "validation error", map[string]string{
 			"details": err.Error(),
 		})

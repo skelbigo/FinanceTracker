@@ -2,10 +2,8 @@ package budgets
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -19,73 +17,51 @@ func NewRepo(db *pgxpool.Pool) *Repo {
 
 func (r *Repo) Upsert(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
 	const q = `
-INSERT INTO budgets (workspace_id, category_id, year, month, amount)
+INSERT INTO budgets (workspace_id, category_id, period, amount_limit_minor, currency)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (workspace_id, category_id, year, month)
-DO UPDATE SET amount = EXCLUDED.amount, updated_at = now()
-RETURNING id, workspace_id, category_id, year, month, amount, created_at, updated_at;
+ON CONFLICT (workspace_id, category_id, period, currency)
+DO UPDATE SET amount_limit_minor = EXCLUDED.amount_limit_minor, updated_at = now()
+RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at;
 `
 
 	var b Budget
-	err := r.db.QueryRow(ctx, q, workspaceID, req.CategoryID, req.Year, req.Month, req.Amount).
-		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Year, &b.Month, &b.Amount, &b.CreatedAt, &b.UpdatedAt)
+	err := r.db.QueryRow(ctx, q, workspaceID, req.CategoryID, req.Period, req.AmountLimitMinor, req.Currency).
+		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return Budget{}, err
 	}
-
 	return b, nil
 }
 
-func (r *Repo) ListWithStats(ctx context.Context, workspaceID uuid.UUID, year int, month int) ([]BudgetResponse, error) {
-	start, end := monthRangeUTC(year, month)
-
-	const q = `
-SELECT b.id, b.workspace_id, b.category_id, b.year, b.month, b.amount, b.created_at, b.updated_at,
-  COALESCE(SUM(t.amount_minor), 0)::bigint AS spent
-FROM budgets b
-LEFT JOIN transactions t
-  ON t.workspace_id = b.workspace_id
- AND t.category_id  = b.category_id
- AND t.occurred_at >= $2
- AND t.occurred_at <  $3
- AND t.type = 'expense'
-WHERE b.workspace_id = $1
-  AND b.year  = $4
-  AND b.month = $5
-GROUP BY b.id
-ORDER BY b.category_id;
+func (r *Repo) List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error) {
+	q := `
+SELECT id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at
+FROM budgets
+WHERE workspace_id = $1
 `
-	rows, err := r.db.Query(ctx, q, workspaceID, start, end, year, month)
+	args := []any{workspaceID}
+	if period != nil {
+		q += "  AND period = $2\n"
+		args = append(args, *period)
+	}
+	q += "ORDER BY created_at DESC;\n"
+
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	out := make([]BudgetResponse, 0)
-
+	out := make([]Budget, 0)
 	for rows.Next() {
 		var b Budget
-		var spent int64
-
-		if err := rows.Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Year, &b.Month, &b.Amount, &b.CreatedAt,
-			&b.UpdatedAt, &spent); err != nil {
+		if err := rows.Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt); err != nil {
 			return nil, err
 		}
-
-		out = append(out, NewBudgetResponse(b, spent))
+		out = append(out, b)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
 	return out, nil
 }
-
-func monthRangeUTC(year int, month int) (time.Time, time.Time) {
-	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-	end := start.AddDate(0, 1, 0)
-	return start, end
-}
-
-var _ = pgx.ErrNoRows

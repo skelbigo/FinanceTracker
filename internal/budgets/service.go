@@ -3,17 +3,20 @@ package budgets
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/google/uuid"
 )
 
 type BudgetRepo interface {
 	Upsert(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error)
-	ListWithStats(ctx context.Context, workspaceID uuid.UUID, year int, month int) ([]BudgetResponse, error)
+	List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error)
 }
 
 type CategoryLookup interface {
 	ExistsInWorkspace(ctx context.Context, workspaceID, categoryID uuid.UUID) (bool, error)
-	GetType(ctx context.Context, workspaceID, categoryID uuid.UUID) (string, error) // "expense"/"income" або як у тебе
+	GetType(ctx context.Context, workspaceID, categoryID uuid.UUID) (string, error)
 }
 
 type Service struct {
@@ -23,35 +26,27 @@ type Service struct {
 }
 
 func NewService(repo BudgetRepo, categories CategoryLookup, enforceExpense bool) *Service {
-	return &Service{
-		repo:           repo,
-		categories:     categories,
-		enforceExpense: enforceExpense,
-	}
+	return &Service{repo: repo, categories: categories, enforceExpense: enforceExpense}
 }
 
-const (
-	minYear = 2025
-	maxYear = 2100
-)
+var currencyRe = regexp.MustCompile(`^[A-Z]{3}$`)
 
-func validateYearMonthAmount(req UpsertBudgetRequest) error {
-	if req.Year < minYear || req.Year > maxYear {
-		return fmt.Errorf("%w: %d (allowed %d..%d)", ErrInvalidYear, req.Year, minYear, maxYear)
-	}
-	if req.Month < 1 || req.Month > 12 {
-		return fmt.Errorf("%w: %d (allowed 1..12)", ErrInvalidMonth, req.Month)
-	}
-	if req.Amount < 0 {
-		return fmt.Errorf("%w: %d (must be >= 0)", ErrInvalidAmount, req.Amount)
-	}
-	return nil
+func normalizeCurrency(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
 }
 
 func (s *Service) UpsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
-	if err := validateYearMonthAmount(req); err != nil {
-		return Budget{}, err
+	if !req.Period.IsValid() {
+		return Budget{}, fmt.Errorf("%w: %s", ErrInvalidPeriod, req.Period)
 	}
+	if req.AmountLimitMinor <= 0 {
+		return Budget{}, fmt.Errorf("%w: %d (must be > 0)", ErrInvalidLimit, req.AmountLimitMinor)
+	}
+	cur := normalizeCurrency(req.Currency)
+	if !currencyRe.MatchString(cur) {
+		return Budget{}, fmt.Errorf("%w: %q", ErrInvalidCurrency, req.Currency)
+	}
+	req.Currency = cur
 
 	ok, err := s.categories.ExistsInWorkspace(ctx, workspaceID, req.CategoryID)
 	if err != nil {
@@ -74,13 +69,9 @@ func (s *Service) UpsertBudget(ctx context.Context, workspaceID uuid.UUID, req U
 	return s.repo.Upsert(ctx, workspaceID, req)
 }
 
-func (s *Service) GetBudgetsForMonth(ctx context.Context, workspaceID uuid.UUID, year int, month int) ([]BudgetResponse, error) {
-	if year < minYear || year > maxYear {
-		return nil, fmt.Errorf("%w: %d (allowed %d..%d)", ErrInvalidYear, year, minYear, maxYear)
+func (s *Service) ListBudgets(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error) {
+	if period != nil && !period.IsValid() {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidPeriod, *period)
 	}
-	if month < 1 || month > 12 {
-		return nil, fmt.Errorf("%w: %d (allowed 1..12)", ErrInvalidMonth, month)
-	}
-
-	return s.repo.ListWithStats(ctx, workspaceID, year, month)
+	return s.repo.List(ctx, workspaceID, period)
 }
