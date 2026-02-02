@@ -3,10 +3,10 @@ package budgets
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,6 +35,7 @@ RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, c
 		if errors.As(err, &pgErr) {
 			switch pgErr.Code {
 			case "23505":
+				// unique constraint violation
 				return Budget{}, ErrBudgetExists
 			}
 		}
@@ -52,7 +53,7 @@ SET category_id = $3,
     currency = $6,
     updated_at = now()
 WHERE workspace_id = $1 AND id = $2
-RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, updated_at;
+RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at;
 `
 	var b Budget
 	err := r.db.QueryRow(ctx, q, workspaceID, budgetID, req.CategoryID, req.Period, req.AmountLimitMinor, req.Currency).
@@ -76,7 +77,7 @@ RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, u
 func (r *Repo) DeleteBudget(ctx context.Context, workspaceID, budgetID uuid.UUID) error {
 	const q = `
 DELETE FROM budgets
-WHERE workspace_id = $1 AND id = $2
+WHERE workspace_id = $1 AND id = $2;
 `
 	ct, err := r.db.Exec(ctx, q, workspaceID, budgetID)
 	if err != nil {
@@ -92,11 +93,11 @@ func (r *Repo) GetBudgetByID(ctx context.Context, workspaceID, budgetID uuid.UUI
 	const q = `
 SELECT id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at
 FROM budgets
-WHERE workspace_id = $1 AND id = $2
+WHERE workspace_id = $1 AND id = $2;
 `
 	var b Budget
-	err := r.db.QueryRow(ctx, q, workspaceID, budgetID).Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period,
-		&b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
+	err := r.db.QueryRow(ctx, q, workspaceID, budgetID).
+		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Budget{}, ErrBudgetNotFound

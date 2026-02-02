@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -15,11 +16,12 @@ type BudgetRepo interface {
 	DeleteBudget(ctx context.Context, workspaceID, budgetID uuid.UUID) error
 	GetBudgetByID(ctx context.Context, workspaceID, budgetID uuid.UUID) (Budget, error)
 	List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error)
+	GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error)
 }
 
 type CategoryLookup interface {
 	ExistsInWorkspace(ctx context.Context, workspaceID, categoryID uuid.UUID) (bool, error)
-	GetType(ctx context.Context, workspaceID, categoryID uuid.UUID) (string, error)
+	GetType(ctx context.Context, workspaceID, categoryID uuid.UUID) (string, error) // "expense"/"income"
 }
 
 type Service struct {
@@ -34,7 +36,9 @@ func NewService(repo BudgetRepo, categories CategoryLookup, enforceExpense bool)
 
 var currencyRe = regexp.MustCompile(`^[A-Z]{3}$`)
 
-func normalizeCurrency(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
+func normalizeCurrency(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
+}
 
 func (s *Service) UpsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
 	norm, err := s.validateUpsertInput(ctx, workspaceID, req)
@@ -54,6 +58,10 @@ func (s *Service) Update(ctx context.Context, workspaceID, budgetID uuid.UUID, r
 
 func (s *Service) Delete(ctx context.Context, workspaceID, budgetID uuid.UUID) error {
 	return s.repo.DeleteBudget(ctx, workspaceID, budgetID)
+}
+
+func (s *Service) GetByID(ctx context.Context, workspaceID, budgetID uuid.UUID) (Budget, error) {
+	return s.repo.GetBudgetByID(ctx, workspaceID, budgetID)
 }
 
 func (s *Service) validateUpsertInput(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (UpsertBudgetRequest, error) {
@@ -95,4 +103,22 @@ func (s *Service) ListBudgets(ctx context.Context, workspaceID uuid.UUID, period
 		return nil, fmt.Errorf("%w: %s", ErrInvalidPeriod, *period)
 	}
 	return s.repo.List(ctx, workspaceID, period)
+}
+
+func (s *Service) ListWithProgress(ctx context.Context, workspaceID uuid.UUID, period *Period, now time.Time) ([]BudgetResponse, error) {
+	items, err := s.ListBudgets(ctx, workspaceID, period)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]BudgetResponse, 0, len(items))
+	for _, b := range items {
+		start, end := PeriodBounds(now, b.Period)
+		spent, err := s.repo.GetSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, NewBudgetResponse(b, spent, start, end))
+	}
+	return out, nil
 }

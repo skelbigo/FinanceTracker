@@ -3,6 +3,7 @@ package budgets
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
@@ -77,7 +78,7 @@ func (h *Handler) listBudgets(c *gin.Context) {
 		return
 	}
 
-	items, err := h.svc.ListBudgets(c.Request.Context(), workspaceID, period)
+	items, err := h.svc.ListWithProgress(c.Request.Context(), workspaceID, period, time.Now())
 	if err != nil {
 		respondErr(c, err)
 		return
