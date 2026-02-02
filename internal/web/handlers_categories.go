@@ -15,10 +15,11 @@ type CategoryRowVM struct {
 	ID   string
 	Name string
 	Type string
+	CSRF string
 }
 
-func categoryRowFromModel(cat categories.Category) CategoryRowVM {
-	return CategoryRowVM{ID: cat.ID, Name: cat.Name, Type: string(cat.Type)}
+func categoryRowFromModel(cat categories.Category, csrf string) CategoryRowVM {
+	return CategoryRowVM{ID: cat.ID, Name: cat.Name, Type: string(cat.Type), CSRF: csrf}
 }
 
 func normalizeCategoryType(s string) categories.Type {
@@ -47,9 +48,11 @@ func (h *Handlers) GetCategoriesPage(c *gin.Context) {
 		return
 	}
 
+	csrf := GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
+
 	rows := make([]CategoryRowVM, 0, len(items))
 	for _, it := range items {
-		rows = append(rows, categoryRowFromModel(it))
+		rows = append(rows, categoryRowFromModel(it, csrf))
 	}
 
 	h.render(c, "app/categories.html", gin.H{
@@ -57,6 +60,7 @@ func (h *Handlers) GetCategoriesPage(c *gin.Context) {
 		"BodyClass":  "app-dark app-solid",
 		"MainClass":  "tx-main",
 		"Workspace":  workspaceFromContext(c),
+		"CSRF":       csrf,
 		"Categories": rows,
 		"Flash":      c.Query("flash"),
 	})
@@ -133,7 +137,6 @@ func (h *Handlers) PostUpdateCategory(c *gin.Context) {
 	if !isValidCategoryType(t) {
 		c.Status(http.StatusUnprocessableEntity)
 		h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Type must be income or expense"}})
-		// Keep the row intact.
 		h.renderPartial(c, "cat_row", gin.H{"ID": catID, "Name": strings.TrimSpace(name), "Type": string(t)})
 		return
 	}
@@ -157,7 +160,6 @@ func (h *Handlers) PostUpdateCategory(c *gin.Context) {
 			c.String(http.StatusInternalServerError, "could not update category")
 			return
 		}
-		// Keep the row intact for validation/conflict errors.
 		h.renderPartial(c, "cat_row", gin.H{"ID": catID, "Name": strings.TrimSpace(name), "Type": string(t)})
 		return
 	}
@@ -194,7 +196,6 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, categories.ErrCategoryInUse) && reassignPtr == nil:
-			// Need reassign UI.
 			items, lerr := h.Categories.List(c.Request.Context(), wsID)
 			if lerr != nil {
 				c.String(http.StatusInternalServerError, "could not list categories")
@@ -205,7 +206,7 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 				if it.ID == catID {
 					continue
 				}
-				others = append(others, categoryRowFromModel(it))
+				others = append(others, categoryRowFromModel(it, ""))
 			}
 
 			c.Status(http.StatusConflict)
@@ -232,4 +233,9 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 	c.Status(http.StatusOK)
 	h.renderPartial(c, "cat_clear_errors", gin.H{})
 	_, _ = c.Writer.WriteString("\n<tr id=\"cat-" + catID + "\" hx-swap-oob=\"delete\"></tr>\n")
+
+	items, lerr := h.Categories.List(c.Request.Context(), wsID)
+	if lerr == nil && len(items) == 0 {
+		_, _ = c.Writer.WriteString("\n<tr id=\"cat-empty\" hx-swap-oob=\"beforeend:#cat-tbody\"><td colspan=\"3\">No categories</td></tr>\n")
+	}
 }
