@@ -53,6 +53,10 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 
 	withWS := app.Group("")
 	withWS.Use(h.RequireWorkspace())
+	withWS.GET("/categories", h.GetCategoriesPage)
+	withWS.POST("/categories", h.PostCreateCategory)
+	withWS.POST("/categories/:id/update", h.PostUpdateCategory)
+	withWS.POST("/categories/:id/delete", h.PostDeleteCategory)
 	withWS.GET("/transactions", h.GetTransactionsPage)
 	withWS.GET("/transactions/table", h.GetTransactionsTable)
 	withWS.POST("/transactions", h.PostCreateTransaction)

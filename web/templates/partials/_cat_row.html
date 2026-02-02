@@ -1,10 +1,36 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{{ define "cat_row" }}
+<tr id="cat-{{ .ID }}">
+  <td>
+    <input class="tx-control" form="upd-{{ .ID }}" name="name" value="{{ .Name }}" maxlength="60" required>
+  </td>
+  <td>
+    <select class="tx-control tx-control--select" form="upd-{{ .ID }}" name="type" required>
+      <option value="expense" {{ if eq .Type "expense" }}selected{{ end }}>Expense</option>
+      <option value="income"  {{ if eq .Type "income" }}selected{{ end }}>Income</option>
+    </select>
+  </td>
+  <td class="tx-td-actions">
+    <form id="upd-{{ .ID }}"
+          method="post"
+          hx-post="/app/categories/{{ .ID }}/update"
+          hx-target="#cat-{{ .ID }}"
+          hx-select="tr"
+          hx-swap="outerHTML"
+          class="tx-action-form" style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+      <button class="tx-btn tx-btn--ghost" type="submit">Save</button>
+    </form>
+
+    <form class="tx-action-form" method="post"
+          hx-post="/app/categories/{{ .ID }}/delete"
+          hx-target="#cat-{{ .ID }}"
+          hx-select="tr"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this category?"
+          style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+      <button class="tx-btn tx-btn--danger" type="submit">Delete</button>
+    </form>
+  </td>
+</tr>
+{{ end }}

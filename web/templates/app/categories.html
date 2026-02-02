@@ -1,10 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{{ define "content" }}
+<section class="tx-wrap" aria-label="Categories">
+  <h1 class="tx-title">Categories</h1>
+
+  <div id="cat-errors" class="tx-errors"></div>
+
+  <div class="tx-block tx-block--form">
+    <form id="cat-create"
+          method="post"
+          hx-post="/app/categories"
+          hx-target="#cat-tbody"
+          hx-select="tr"
+          hx-swap="beforeend">
+
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+
+      <div class="tx-bar" role="group" aria-label="Add category">
+        <input class="tx-control" name="name" placeholder="Category name" maxlength="60" required>
+
+        <select class="tx-control tx-control--select" name="type" required>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+
+        <button class="tx-btn tx-btn--primary" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="tx-table-wrap" role="region" aria-label="Categories table" tabindex="0">
+    <table class="tx-table">
+      <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col" class="tx-th-actions">Actions</th>
+      </tr>
+      </thead>
+
+      <tbody id="cat-tbody">
+      {{ range .Categories }}
+      {{ template "cat_row" . }}
+      {{ else }}
+      <tr id="cat-empty"><td colspan="3">No categories</td></tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ end }}

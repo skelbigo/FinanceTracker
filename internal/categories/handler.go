@@ -54,6 +54,8 @@ func (h *Handler) create(c *gin.Context) {
 	cat, err := h.svc.Create(c.Request.Context(), workspaceID, req.Name, t)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrInvalidName):
+			httpx.Unprocessable(c, "invalid category name", map[string]string{"name": "1..60 chars"})
 		case errors.Is(err, ErrInvalidType):
 			httpx.Unprocessable(c, "invalid category type", map[string]string{"type": "income|expense"})
 		case errors.Is(err, ErrCategoryExists):

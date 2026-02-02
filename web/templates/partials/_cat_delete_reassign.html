@@ -1,10 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{{ define "cat_delete_reassign" }}
+<tr id="cat-{{ .ID }}">
+    <td colspan="3">
+        <div class="tx-block" style="border:1px solid #f99; background:#fee; padding:12px;">
+            <b>Category is used by transactions.</b>
+            <div style="margin-top:10px;">
+                <form method="post"
+                      hx-post="/app/categories/{{ .ID }}/delete"
+                      hx-target="#cat-{{ .ID }}"
+                      hx-select="tr"
+                      hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+
+                    <select class="tx-control tx-control--select" name="reassign_to" required>
+                        <option value="none">(No category)</option>
+                        {{ range .OtherCategories }}
+                        <option value="{{ .ID }}">{{ .Name }} ({{ .Type }})</option>
+                        {{ end }}
+                    </select>
+
+                    <button class="tx-btn tx-btn--primary" type="submit" style="margin-left:8px;">Move &amp; delete</button>
+                </form>
+            </div>
+        </div>
+    </td>
+</tr>
+{{ end }}
+
+{{ define "cat_delete_reassign_response" }}
+{{ template "cat_clear_errors" . }}
+
+<table style="display:none"><tbody>
+{{ template "cat_delete_reassign" . }}
+</tbody></table>
+{{ end }}

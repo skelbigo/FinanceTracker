@@ -1,10 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{{ define "cat_errors" }}
+<div id="cat-errors" hx-swap-oob="true" class="tx-errors">
+  {{ range .Errors }}
+  <div class="error">{{ . }}</div>
+  {{ else }}
+  {{/* no errors */}}
+  {{ end }}
+</div>
+{{ end }}
+
+{{ define "cat_clear_errors" }}
+<div id="cat-errors" hx-swap-oob="true" class="tx-errors"></div>
+{{ end }}
+
+{{ define "cat_create_response" }}
+{{ template "cat_clear_errors" . }}
+<tr id="cat-empty" hx-swap-oob="delete"></tr>
+
+<table style="display:none"><tbody>
+{{ template "cat_row" .Row }}
+</tbody></table>
+{{ end }}
+
+{{ define "cat_update_response" }}
+{{ template "cat_clear_errors" . }}
+
+<table style="display:none"><tbody>
+{{ template "cat_row" .Row }}
+</tbody></table>
+{{ end }}
+
+{{ define "cat_update_error" }}
+{{ template "cat_errors" . }}
+
+<table style="display:none"><tbody>
+{{ template "cat_row" .Row }}
+</tbody></table>
+{{ end }}
