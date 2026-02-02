@@ -1,5 +1,9 @@
 {{ define "content" }}
 <section class="tx-wrap" aria-label="Categories">
+  <div class="tx-nav">
+    <a class="tx-link" href="/app/transactions">← Back to Transactions</a>
+  </div>
+
   <h1 class="tx-title">Categories</h1>
 
   <div id="cat-errors" class="tx-errors"></div>
@@ -9,7 +13,8 @@
           method="post"
           hx-post="/app/categories"
           hx-target="#cat-tbody"
-          hx-select="tr"
+          hx-select="#cat-fragment tr"
+          hx-select-oob="#cat-errors,#cat-empty"
           hx-swap="beforeend">
 
       <input type="hidden" name="csrf_token" value="{{ .CSRF }}">

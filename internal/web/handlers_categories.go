@@ -106,12 +106,14 @@ func (h *Handlers) PostCreateCategory(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 	h.renderPartial(c, "cat_clear_errors", gin.H{})
-	_, _ = c.Writer.WriteString("\n<tr id=\"cat-empty\" hx-swap-oob=\"delete\"></tr>\n")
+	_, _ = c.Writer.WriteString("\n<table style=\"display:none\"><tbody>\n<tr id=\"cat-empty\" hx-swap-oob=\"delete\"></tr>\n</tbody></table>\n")
+	_, _ = c.Writer.WriteString("\n<table id=\"cat-fragment\"><tbody>\n")
 	h.renderPartial(c, "cat_row", gin.H{
 		"ID":   cat.ID,
 		"Name": cat.Name,
 		"Type": string(cat.Type),
 	})
+	_, _ = c.Writer.WriteString("\n</tbody></table>\n")
 }
 
 func (h *Handlers) PostUpdateCategory(c *gin.Context) {
