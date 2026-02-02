@@ -11,21 +11,21 @@ import (
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
 
-type catRowVM struct {
+type CategoryRowVM struct {
 	ID   string
 	Name string
 	Type string
 }
 
-func catRowFromModel(c categories.Category) catRowVM {
-	return catRowVM{ID: c.ID, Name: c.Name, Type: string(c.Type)}
+func categoryRowFromModel(cat categories.Category) CategoryRowVM {
+	return CategoryRowVM{ID: cat.ID, Name: cat.Name, Type: string(cat.Type)}
 }
 
-func normalizeCatType(s string) categories.Type {
+func normalizeCategoryType(s string) categories.Type {
 	return categories.Type(strings.TrimSpace(strings.ToLower(s)))
 }
 
-func validateCatType(t categories.Type) bool {
+func isValidCategoryType(t categories.Type) bool {
 	return t == categories.TypeIncome || t == categories.TypeExpense
 }
 
@@ -47,9 +47,9 @@ func (h *Handlers) GetCategoriesPage(c *gin.Context) {
 		return
 	}
 
-	rows := make([]catRowVM, 0, len(items))
+	rows := make([]CategoryRowVM, 0, len(items))
 	for _, it := range items {
-		rows = append(rows, catRowFromModel(it))
+		rows = append(rows, categoryRowFromModel(it))
 	}
 
 	h.render(c, "app/categories.html", gin.H{
@@ -75,8 +75,8 @@ func (h *Handlers) PostCreateCategory(c *gin.Context) {
 	}
 
 	name := c.PostForm("name")
-	t := normalizeCatType(c.PostForm("type"))
-	if !validateCatType(t) {
+	t := normalizeCategoryType(c.PostForm("type"))
+	if !isValidCategoryType(t) {
 		c.Status(http.StatusUnprocessableEntity)
 		h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Type must be income or expense"}})
 		return
@@ -100,8 +100,14 @@ func (h *Handlers) PostCreateCategory(c *gin.Context) {
 		return
 	}
 
-	row := catRowFromModel(cat)
-	h.renderPartial(c, "cat_create_response", gin.H{"Row": row})
+	c.Status(http.StatusOK)
+	h.renderPartial(c, "cat_clear_errors", gin.H{})
+	_, _ = c.Writer.WriteString("\n<tr id=\"cat-empty\" hx-swap-oob=\"delete\"></tr>\n")
+	h.renderPartial(c, "cat_row", gin.H{
+		"ID":   cat.ID,
+		"Name": cat.Name,
+		"Type": string(cat.Type),
+	})
 }
 
 func (h *Handlers) PostUpdateCategory(c *gin.Context) {
@@ -123,13 +129,12 @@ func (h *Handlers) PostUpdateCategory(c *gin.Context) {
 	}
 
 	name := c.PostForm("name")
-	t := normalizeCatType(c.PostForm("type"))
-	if !validateCatType(t) {
+	t := normalizeCategoryType(c.PostForm("type"))
+	if !isValidCategoryType(t) {
 		c.Status(http.StatusUnprocessableEntity)
-		h.renderPartial(c, "cat_update_error", gin.H{
-			"Errors": []string{"Type must be income or expense"},
-			"Row":    catRowVM{ID: catID, Name: strings.TrimSpace(name), Type: string(t)},
-		})
+		h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Type must be income or expense"}})
+		// Keep the row intact.
+		h.renderPartial(c, "cat_row", gin.H{"ID": catID, "Name": strings.TrimSpace(name), "Type": string(t)})
 		return
 	}
 
@@ -138,33 +143,28 @@ func (h *Handlers) PostUpdateCategory(c *gin.Context) {
 		switch {
 		case errors.Is(err, categories.ErrInvalidName):
 			c.Status(http.StatusUnprocessableEntity)
-			h.renderPartial(c, "cat_update_error", gin.H{
-				"Errors": []string{"Name must be 1..60 characters"},
-				"Row":    catRowVM{ID: catID, Name: strings.TrimSpace(name), Type: string(t)},
-			})
+			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Name must be 1..60 characters"}})
 		case errors.Is(err, categories.ErrInvalidType):
 			c.Status(http.StatusUnprocessableEntity)
-			h.renderPartial(c, "cat_update_error", gin.H{
-				"Errors": []string{"Type must be income or expense"},
-				"Row":    catRowVM{ID: catID, Name: strings.TrimSpace(name), Type: string(t)},
-			})
+			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Type must be income or expense"}})
 		case errors.Is(err, categories.ErrCategoryExists):
 			c.Status(http.StatusConflict)
-			h.renderPartial(c, "cat_update_error", gin.H{
-				"Errors": []string{"Category already exists"},
-				"Row":    catRowVM{ID: catID, Name: strings.TrimSpace(name), Type: string(t)},
-			})
+			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Category already exists"}})
 		case errors.Is(err, categories.ErrCategoryNotFound):
 			c.Status(http.StatusNotFound)
 			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Category not found"}})
 		default:
 			c.String(http.StatusInternalServerError, "could not update category")
+			return
 		}
+		// Keep the row intact for validation/conflict errors.
+		h.renderPartial(c, "cat_row", gin.H{"ID": catID, "Name": strings.TrimSpace(name), "Type": string(t)})
 		return
 	}
 
-	row := catRowFromModel(out)
-	h.renderPartial(c, "cat_update_response", gin.H{"Row": row})
+	c.Status(http.StatusOK)
+	h.renderPartial(c, "cat_clear_errors", gin.H{})
+	h.renderPartial(c, "cat_row", gin.H{"ID": out.ID, "Name": out.Name, "Type": string(out.Type)})
 }
 
 func (h *Handlers) PostDeleteCategory(c *gin.Context) {
@@ -194,20 +194,23 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, categories.ErrCategoryInUse) && reassignPtr == nil:
+			// Need reassign UI.
 			items, lerr := h.Categories.List(c.Request.Context(), wsID)
 			if lerr != nil {
 				c.String(http.StatusInternalServerError, "could not list categories")
 				return
 			}
-			others := make([]catRowVM, 0, len(items))
+			others := make([]CategoryRowVM, 0, len(items))
 			for _, it := range items {
 				if it.ID == catID {
 					continue
 				}
-				others = append(others, catRowFromModel(it))
+				others = append(others, categoryRowFromModel(it))
 			}
+
 			c.Status(http.StatusConflict)
-			h.renderPartial(c, "cat_delete_reassign_response", gin.H{
+			h.renderPartial(c, "cat_clear_errors", gin.H{})
+			h.renderPartial(c, "cat_delete_reassign", gin.H{
 				"ID":              catID,
 				"OtherCategories": others,
 			})
@@ -217,7 +220,6 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Category not found"}})
 			return
 		case errors.Is(err, categories.ErrCategoryInUse):
-			// Reassign flow failed to clear usage (shouldn't usually happen)
 			c.Status(http.StatusConflict)
 			h.renderPartial(c, "cat_errors", gin.H{"Errors": []string{"Category is used by transactions"}})
 			return
@@ -227,5 +229,7 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 		}
 	}
 
-	h.renderPartial(c, "noop", gin.H{})
+	c.Status(http.StatusOK)
+	h.renderPartial(c, "cat_clear_errors", gin.H{})
+	_, _ = c.Writer.WriteString("\n<tr id=\"cat-" + catID + "\" hx-swap-oob=\"delete\"></tr>\n")
 }
