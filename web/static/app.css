@@ -694,6 +694,33 @@ body.auth::after {
     letter-spacing: -0.3px;
 }
 
+.tx-nav {
+    margin-bottom: 10px;
+}
+
+.tx-between {
+    margin-top: 10px;
+}
+
+.tx-link {
+    color: rgba(32, 242, 200, 0.92);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.tx-link:hover {
+    text-decoration: underline;
+}
+
+.tx-block-title {
+    margin: 6px 0 8px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.60);
+}
+
 .tx-errors {
     margin-bottom: 12px;
 }

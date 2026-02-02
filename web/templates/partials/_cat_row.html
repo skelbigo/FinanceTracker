@@ -16,6 +16,7 @@
           hx-target="#cat-{{ .ID }}"
           hx-select="tr"
           hx-swap="outerHTML"
+          hx-select-oob="#cat-errors"
           class="tx-action-form" style="display:inline;">
       <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
       <button class="tx-btn tx-btn--ghost" type="submit">Save</button>
@@ -26,6 +27,7 @@
           hx-target="#cat-{{ .ID }}"
           hx-select="tr"
           hx-swap="outerHTML"
+          hx-select-oob="#cat-errors"
           hx-confirm="Delete this category?"
           style="display:inline;">
       <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">

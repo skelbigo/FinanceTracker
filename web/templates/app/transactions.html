@@ -1,5 +1,9 @@
 {{ define "content" }}
 <section class="tx-wrap" aria-label="Transactions">
+  <div class="tx-nav">
+    <a class="tx-link" href="/app">← Back to Dashboard</a>
+  </div>
+
   <h1 class="tx-title">Transactions</h1>
 
   <div id="tx-form-errors" class="tx-errors"></div>
@@ -8,7 +12,12 @@
     {{ template "tx_form" . }}
   </div>
 
+  <div class="tx-between">
+    <a class="tx-link" href="/app/categories">Create categories</a>
+  </div>
+
   <div class="tx-block tx-block--filters">
+    <div class="tx-block-title">Filters and search</div>
     {{ template "tx_filters" . }}
   </div>
 
