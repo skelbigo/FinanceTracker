@@ -34,13 +34,24 @@ func ValidateType(t Type) bool {
 	return t == TypeIncome || t == TypeExpense
 }
 
-func NormalizeCurrencyStrict(s string) (string, error) {
-	raw := strings.TrimSpace(s)
-	cur := strings.ToUpper(raw)
-	if raw != cur || !currencyRe.MatchString(cur) {
-		return "", ErrInvalidCurrency
+func ValidateDateRange(from, to *time.Time) error {
+	if from != nil && to != nil && from.After(*to) {
+		return ErrInvalidRange
 	}
-	return cur, nil
+	return nil
+}
+
+func NormalizeCurrencyStrict(s string) (string, error) {
+	if len(s) != 3 {
+		return "", fmt.Errorf("currency must be exactly 3 uppercase letters")
+	}
+	for i := 0; i < 3; i++ {
+		ch := s[i]
+		if ch < 'A' || ch > 'Z' {
+			return "", fmt.Errorf("currency must be exactly 3 uppercase letters")
+		}
+	}
+	return s, nil
 }
 
 func ParseOccurredAt(s string) (time.Time, error) {
@@ -84,7 +95,6 @@ func ParseAmountMinor(amount string) (int64, error) {
 		return 0, ErrInvalidAmount
 	}
 
-	// Allow comma decimal if dot not present.
 	if strings.Contains(s, ",") && !strings.Contains(s, ".") {
 		s = strings.ReplaceAll(s, ",", ".")
 	}

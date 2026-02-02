@@ -1,60 +1,67 @@
 {{ define "content" }}
-<section style="max-width: 900px; margin: 0 auto; padding: 24px;">
-  <h1 style="margin: 0 0 12px 0;">Workspaces</h1>
-  <p style="margin: 0 0 18px 0; opacity: 0.9;">Here you can create and view your workspaces. The current workspace will be saved in a cookie <code>current_workspace</code>.</p>
+<section class="ws-wrap" aria-label="Workspaces">
+  <h1 class="ws-title">Workspaces</h1>
+  <p class="ws-sub">
+    Here you can create and view your workspaces. The current workspace will be saved in a cookie
+    <code>current_workspace</code>.
+  </p>
 
-  <div style="border: 1px solid #222; border-radius: 14px; padding: 16px; margin-bottom: 18px;">
-    <h2 style="margin: 0 0 12px 0; font-size: 18px;">Create workspace</h2>
-    <form action="/app/workspaces" method="post" style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
-      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+  <div class="ws-card">
+    <div class="ws-card-section">
+      <h2 class="ws-card-title">Create workspace</h2>
 
-      <label style="display: grid; gap: 6px;">
-        <span style="font-size: 13px; opacity: 0.9;">Name</span>
-        <input name="name" required placeholder="E.g. Family" style="padding: 9px 10px; border-radius: 10px; border: 1px solid #333; min-width: 240px;" />
-      </label>
+      <form class="ws-form" action="/app/workspaces" method="post">
+        <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
 
-      <label style="display: grid; gap: 6px;">
-        <span style="font-size: 13px; opacity: 0.9;">Default currency</span>
-        <input name="default_currency" maxlength="3" placeholder="UAH" style="padding: 9px 10px; border-radius: 10px; border: 1px solid #333; width: 110px;" />
-      </label>
+        <label class="ws-field">
+          <span class="ws-label">Name</span>
+          <input class="ws-input" name="name" required placeholder="E.g. Family" autocomplete="off" />
+        </label>
 
-      <button type="submit" style="padding: 10px 14px; border: 1px solid #ddd; border-radius: 10px; background: transparent; cursor: pointer;">
-        Create
-      </button>
-    </form>
-  </div>
+        <label class="ws-field ws-field-small">
+          <span class="ws-label">Default currency</span>
+          <input class="ws-input ws-input-small" name="default_currency" maxlength="3" placeholder="UAH" autocomplete="off" />
+        </label>
 
-  <div style="border: 1px solid #222; border-radius: 14px; padding: 16px;">
-    <h2 style="margin: 0 0 12px 0; font-size: 18px;">My workspaces</h2>
+        <button class="ws-btn" type="submit">Create</button>
+      </form>
+    </div>
 
-    {{ if .Items }}
-    <table style="width: 100%; border-collapse: collapse;">
-      <thead>
-      <tr style="text-align: left;">
-        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Name</th>
-        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Role</th>
-        <th style="padding: 8px 6px; border-bottom: 1px solid #222;">Status</th>
-      </tr>
-      </thead>
-      <tbody>
-      {{ range .Items }}
-      <tr>
-        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">{{ .Name }}</td>
-        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">{{ .Role }}</td>
-        <td style="padding: 8px 6px; border-bottom: 1px solid #1a1a1a;">
-          {{ if eq $.CurrentID .ID }}
-          <span style="padding: 3px 8px; border: 1px solid #ddd; border-radius: 999px;">Current</span>
-          {{ else }}
-          <span style="opacity: 0.7;">—</span>
-          {{ end }}
-        </td>
-      </tr>
+    <div class="ws-divider" role="separator" aria-hidden="true"></div>
+
+    <div class="ws-card-section">
+      <h2 class="ws-card-title">My workspaces</h2>
+
+      {{ if .Items }}
+      <div class="ws-list" role="list">
+        {{ range .Items }}
+        <div class="ws-item" role="listitem">
+          <div class="ws-item-main">
+            <div class="ws-item-name">{{ .Name }}</div>
+            <div class="ws-item-meta">{{ .Role }}</div>
+          </div>
+          <div class="ws-item-status">
+            {{ if eq $.CurrentID .ID }}
+            <span class="ws-pill">Current</span>
+            {{ else }}
+            <span class="ws-dash">—</span>
+            {{ end }}
+          </div>
+        </div>
+        {{ end }}
+      </div>
+      {{ else }}
+      <div class="ws-empty">
+        <div class="ws-empty-icon" aria-hidden="true">
+          <svg class="ws-empty-icon-svg" width="82" height="62" viewBox="0 0 100 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 22C10 16.4772 14.4772 12 20 12H40L50 22H80C85.5228 22 90 26.4772 90 32V56C90 61.5228 85.5228 66 80 66H20C14.4772 66 10 61.5228 10 56V22Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M10 32H90" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+          </svg>
+        </div>
+        <div class="ws-empty-text">No workspaces yet</div>
+      </div>
       {{ end }}
-      </tbody>
-    </table>
-    {{ else }}
-    <p style="margin: 0; opacity: 0.9;">There are no workspaces yet. Create the first one </p>
-    {{ end }}
+    </div>
   </div>
 </section>
 {{ end }}

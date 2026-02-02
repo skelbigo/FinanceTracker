@@ -1,16 +1,19 @@
 {{ define "tx_update_response" }}
-<div id="tx-form-errors" hx-swap-oob="true"></div>
+<div id="tx-form-errors" hx-swap-oob="true" class="tx-errors"></div>
+
+<table style="display:none"><tbody>
 {{ template "tx_row" .Row }}
+</tbody></table>
 {{ end }}
 
 {{ define "tx_update_error" }}
-<div id="tx-form-errors" hx-swap-oob="true">
+<div id="tx-form-errors" hx-swap-oob="true" class="tx-errors">
   {{ range .Errors }}
-  <div class="flash">{{ . }}</div>
-  {{ else }}
-  {{/* no errors */}}
+  <div class="error">{{ . }}</div>
   {{ end }}
 </div>
 
+<table style="display:none"><tbody>
 {{ template "tx_row_edit" . }}
+</tbody></table>
 {{ end }}

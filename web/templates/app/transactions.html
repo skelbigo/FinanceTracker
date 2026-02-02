@@ -1,37 +1,42 @@
 {{ define "content" }}
-<h1>Transactions</h1>
+<section class="tx-wrap" aria-label="Transactions">
+  <h1 class="tx-title">Transactions</h1>
 
-<div id="tx-form-errors"></div>
+  <div id="tx-form-errors" class="tx-errors"></div>
 
-<div style="margin-top: 12px;">
-  {{ template "tx_form" . }}
-</div>
+  <div class="tx-block tx-block--form">
+    {{ template "tx_form" . }}
+  </div>
 
-<div style="margin-top: 16px;">
-  {{ template "tx_filters" . }}
-</div>
+  <div class="tx-block tx-block--filters">
+    {{ template "tx_filters" . }}
+  </div>
 
-<table style="width: 100%; margin-top: 12px; border-collapse: collapse;">
-  <thead>
-  <tr>
-    <th align="left">Date</th>
-    <th align="left">Type</th>
-    <th align="left">Category</th>
-    <th align="left">Amount</th>
-    <th align="left">Note</th>
-    <th align="left">Actions</th>
-  </tr>
-  </thead>
+  <div class="tx-table-wrap" role="region" aria-label="Transactions table" tabindex="0">
+    <table class="tx-table">
+      <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Type</th>
+        <th scope="col">Category</th>
+        <th scope="col" class="tx-th-amount">Amount</th>
+        <th scope="col">Note</th>
+        <th scope="col" class="tx-th-actions">Actions</th>
+      </tr>
+      </thead>
 
-  <tbody id="tx-tbody"
-         hx-get="/app/transactions/table"
-         hx-trigger="load"
-         hx-include="#tx-filters"
-         hx-target="this"
-         hx-swap="innerHTML">
-  {{/* HTMX will load rows */}}
-  </tbody>
-</table>
+      <tbody id="tx-tbody"
+             hx-get="/app/transactions/table"
+             hx-trigger="load, tx-filters-changed from:body"
+             hx-include="#tx-filters"
+             hx-target="this"
+             hx-select="tr"
+             hx-swap="innerHTML">
+      {{/* HTMX will load rows */}}
+      </tbody>
+    </table>
+  </div>
 
-<div id="tx-pagination"></div>
+  <div id="tx-pagination" class="tx-pagination"></div>
+</section>
 {{ end }}

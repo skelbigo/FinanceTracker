@@ -34,8 +34,10 @@ func (h *Handlers) GetWorkspacesPage(c *gin.Context) {
 	current, _ := c.Cookie(CurrentWorkspaceCookie)
 
 	h.render(c, "app/workspaces.html", gin.H{
-		"Title":     "Workspaces",
-		"BodyClass": "app-dark",
+		"Title": "Workspaces",
+		// app-solid removes the light split band at the bottom of the page.
+		"BodyClass": "app-dark app-solid",
+		"MainClass": "ws-main",
 		"Flash":     c.Query("flash"),
 		"Items":     items,
 		"CurrentID": current,

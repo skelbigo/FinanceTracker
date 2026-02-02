@@ -1,9 +1,11 @@
 {{ define "tx_tbody" }}
+<table style="display:none"><tbody>
 {{ range .Items }}
 {{ template "tx_row" . }}
 {{ else }}
-<tr><td colspan="6">No transactions</td></tr>
+<tr class="tx-empty"><td colspan="6">No transactions</td></tr>
 {{ end }}
+</tbody></table>
 
 {{ template "tx_pagination_oob" . }}
 {{ end }}

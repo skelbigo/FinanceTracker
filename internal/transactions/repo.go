@@ -3,9 +3,10 @@ package transactions
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repo struct {
@@ -15,6 +16,7 @@ type Repo struct {
 func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 
 func (r *Repo) Create(ctx context.Context, t Transaction) (Transaction, error) {
+	// Avoid inserting NULL into NOT NULL text[] column.
 	if t.Tags == nil {
 		t.Tags = []string{}
 	}
@@ -42,10 +44,10 @@ type ListFilter struct {
 	To         *time.Time
 	Type       *Type
 	CategoryID *string
-	Search     *string
-	Limit      int
+	Search     *string // search in note (ILIKE) or exact tag match
+	Limit      int     // page size (service will query Limit+1)
 	Offset     int
-	Sort       string
+	Sort       string // occurred_at_desc, occurred_at_asc, amount_desc, amount_asc
 }
 
 func orderByFromSort(sort string) string {
@@ -71,8 +73,8 @@ func (r *Repo) List(ctx context.Context, workspaceID string, f ListFilter) ([]Tr
 
 	var sb strings.Builder
 	sb.WriteString(`
-SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note,
-	tags, created_at, updated_at
+SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
+       created_at, updated_at
 FROM transactions
 WHERE workspace_id = $1::uuid
 `)
@@ -82,12 +84,12 @@ WHERE workspace_id = $1::uuid
 		argN++
 	}
 	if f.To != nil {
-		sb.WriteString(fmt.Sprintf("AND occurred_at <= &%d::timestamptz\n", argN))
+		sb.WriteString(fmt.Sprintf("AND occurred_at <= $%d::timestamptz\n", argN))
 		args = append(args, *f.To)
 		argN++
 	}
 	if f.Type != nil {
-		sb.WriteString(fmt.Sprintf("AND type = &%d::text\n", argN))
+		sb.WriteString(fmt.Sprintf("AND type = $%d::text\n", argN))
 		args = append(args, string(*f.Type))
 		argN++
 	}
@@ -99,7 +101,7 @@ WHERE workspace_id = $1::uuid
 	if f.Search != nil {
 		q := strings.TrimSpace(*f.Search)
 		if q != "" {
-			sb.WriteString(fmt.Sprintf("AND (COALESCE(note, '') ILIKE '%%' || '%d' || '%%' OR $%d = ANY(tags))\n", argN, argN))
+			sb.WriteString(fmt.Sprintf("AND (COALESCE(note, '') ILIKE '%%' || $%d || '%%' OR $%d = ANY(tags))\n", argN, argN))
 			args = append(args, q)
 			argN++
 		}
@@ -139,7 +141,7 @@ WHERE workspace_id = $1::uuid
 func (r *Repo) GetByID(ctx context.Context, workspaceID, txID string) (Transaction, error) {
 	const q = `
 SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
-	created_at, updated_at
+       created_at, updated_at
 FROM transactions
 WHERE workspace_id = $1::uuid AND id = $2::uuid
 LIMIT 1;
@@ -147,7 +149,7 @@ LIMIT 1;
 	var out Transaction
 	var typ string
 	err := r.pool.QueryRow(ctx, q, workspaceID, txID).Scan(&out.ID, &out.WorkspaceID, &out.UserID, &out.CategoryID, &typ,
-		&out.AmountMinor, &out.Currency, &out.OccurredAt, &out.Note, &out.CreatedAt, &out.UpdatedAt)
+		&out.AmountMinor, &out.Currency, &out.OccurredAt, &out.Note, &out.Tags, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -164,13 +166,13 @@ UPDATE transactions
 SET category_id=$3::uuid, type=$4, amount_minor=$5, currency=$6, occurred_at=$7, note=$8, tags=$9::text[], updated_at=now()
 WHERE workspace_id=$1::uuid AND id=$2::uuid
 RETURNING id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
-    created_at, updated_at;
+          created_at, updated_at;
 `
 	var out Transaction
 	var typ string
 	err := r.pool.QueryRow(ctx, q, t.WorkspaceID, t.ID, t.CategoryID, string(t.Type), t.AmountMinor, t.Currency, t.OccurredAt,
-		t.Note, t.Tags).Scan(&out.ID, &out.WorkspaceID, &out.UserID, &out.CategoryID, &typ, &out.AmountMinor, &out.Currency,
-		&out.OccurredAt, &out.Note, &out.Tags, &out.CreatedAt, &out.UpdatedAt)
+		t.Note, t.Tags).Scan(&out.ID, &out.WorkspaceID, &out.UserID, &out.CategoryID, &typ, &out.AmountMinor, &out.Currency, &out.OccurredAt,
+		&out.Note, &out.Tags, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -181,7 +183,7 @@ RETURNING id::text, workspace_id::text, user_id::text, category_id::text, type, 
 func (r *Repo) Delete(ctx context.Context, workspaceID, txID string) (bool, error) {
 	const q = `
 DELETE FROM transactions
-WHERE workspace_id = $1::uuid AND id = $2::uuid
+WHERE workspace_id = $1::uuid AND id = $2::uuid;
 `
 	ct, err := r.pool.Exec(ctx, q, workspaceID, txID)
 	if err != nil {

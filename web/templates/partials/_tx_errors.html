@@ -1,15 +1,17 @@
 {{ define "tx_form_errors" }}
 <div id="tx-form-errors" hx-swap-oob="true">
     {{ range .Errors }}
-    <div class="flash">{{ . }}</div>
+    <div class="error">{{ . }}</div>
     {{ else }}
     {{/* no errors */}}
     {{ end }}
 </div>
-{{ template "noop" . }}
 {{ end }}
 
 {{ define "tx_create_response" }}
 <div id="tx-form-errors" hx-swap-oob="true"></div>
+
+<table style="display:none"><tbody>
 {{ template "tx_row" .Row }}
+</tbody></table>
 {{ end }}

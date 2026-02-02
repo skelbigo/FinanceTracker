@@ -56,8 +56,9 @@ func (h *Handlers) RequireWorkspace() gin.HandlerFunc {
 
 		if len(items) == 0 {
 			h.render(c, "app/no_workspace.html", gin.H{
-				"Title":     "No workspace",
-				"BodyClass": "app-dark",
+				"Title":     "No active workspace",
+				"BodyClass": "app-dark app-solid",
+				"MainClass": "empty-main",
 			})
 			c.Abort()
 			return

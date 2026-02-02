@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
@@ -56,6 +58,101 @@ type txPaginationVM struct {
 	Info       string
 }
 
+type txFormInput struct {
+	Type       string
+	Amount     string
+	Currency   string
+	OccurredAt string
+	CategoryID string
+	Note       string
+	Tags       string
+}
+
+func readTxForm(c *gin.Context) txFormInput {
+	return txFormInput{
+		Type:       c.PostForm("type"),
+		Amount:     c.PostForm("amount"),
+		Currency:   c.PostForm("currency"),
+		OccurredAt: c.PostForm("occurred_at"),
+		CategoryID: c.PostForm("category_id"),
+		Note:       c.PostForm("note"),
+		Tags:       c.PostForm("tags"),
+	}
+}
+
+func parseTxForm(in txFormInput) (typ transactions.Type, minor int64, currency string, occurredAt time.Time, catID *string, note *string, tags []string, errs []string) {
+	typ = transactions.NormalizeType(in.Type)
+	if !transactions.ValidateType(typ) {
+		errs = append(errs, "Type must be income or expense")
+	}
+
+	var err error
+	minor, err = transactions.ParseAmountMinor(in.Amount)
+	if err != nil {
+		errs = append(errs, "Amount must be a positive number (e.g. 12.34)")
+	}
+
+	currency, err = transactions.NormalizeCurrencyStrict(in.Currency)
+	if err != nil {
+		errs = append(errs, "Currency must be 3 uppercase letters (e.g. UAH)")
+	}
+
+	occurredAt, err = transactions.ParseOccurredAt(in.OccurredAt)
+	if err != nil {
+		errs = append(errs, "Occurred at must be a valid date")
+	}
+
+	catRaw := strings.TrimSpace(in.CategoryID)
+	catID, err = transactions.NormalizeOptionalUUID(&catRaw)
+	if err != nil {
+		errs = append(errs, "Category id is invalid")
+	}
+
+	noteRaw := strings.TrimSpace(in.Note)
+	note = transactions.NormalizeOptionalNote(&noteRaw)
+
+	tags, err = transactions.ParseTagsCSV(in.Tags)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	return
+}
+
+func (h *Handlers) loadCategoriesMap(ctx context.Context, wsID string) ([]categories.Category, map[string]string, error) {
+	cats, err := h.Categories.List(ctx, wsID)
+	if err != nil {
+		return nil, nil, err
+	}
+	names := make(map[string]string, len(cats))
+	for _, cat := range cats {
+		names[cat.ID] = cat.Name
+	}
+	return cats, names, nil
+}
+
+func (h *Handlers) csrfForRows(c *gin.Context) string {
+	csrf := strings.TrimSpace(c.GetHeader("X-CSRF-Token"))
+	if csrf == "" {
+		csrf = GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
+	}
+	return csrf
+}
+
+func txRowFromModel(t transactions.Transaction, catNames map[string]string, csrf string) txRowVM {
+	return txRowVM{
+		ID:       t.ID,
+		Occurred: t.OccurredAt.Format("2006-01-02"),
+		Type:     string(t.Type),
+		Category: categoryName(t.CategoryID, catNames),
+		Amount:   formatMinor(t.AmountMinor),
+		Currency: t.Currency,
+		Note:     optionalString(t.Note),
+		Tags:     strings.Join(t.Tags, ", "),
+		CSRF:     csrf,
+	}
+}
+
 func (h *Handlers) GetTransactionsPage(c *gin.Context) {
 	if h.Categories == nil || h.Transactions == nil {
 		c.String(http.StatusInternalServerError, "categories/transactions service is not configured")
@@ -68,7 +165,7 @@ func (h *Handlers) GetTransactionsPage(c *gin.Context) {
 		return
 	}
 
-	cats, err := h.Categories.List(c.Request.Context(), wsID)
+	cats, _, err := h.loadCategoriesMap(c.Request.Context(), wsID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not list categories")
 		return
@@ -84,7 +181,8 @@ func (h *Handlers) GetTransactionsPage(c *gin.Context) {
 
 	data := gin.H{
 		"Title":           "Transactions",
-		"BodyClass":       "app-dark",
+		"BodyClass":       "app-dark app-solid",
+		"MainClass":       "tx-main",
 		"Flash":           c.Query("flash"),
 		"Workspace":       workspaceFromContext(c),
 		"Categories":      cats,
@@ -111,7 +209,8 @@ func (h *Handlers) GetTransactionsTable(c *gin.Context) {
 
 	f, errList := buildTxListFilter(filtersVM)
 	if errList != nil {
-		c.Status(http.StatusBadRequest)
+		c.Header("HX-Reswap", "none")
+		c.Status(http.StatusOK)
 		h.renderPartial(c, "tx_form_errors", gin.H{
 			"Errors": []string{errList.Error()},
 		})
@@ -124,33 +223,17 @@ func (h *Handlers) GetTransactionsTable(c *gin.Context) {
 		return
 	}
 
-	cats, err := h.Categories.List(c.Request.Context(), wsID)
+	_, catNames, err := h.loadCategoriesMap(c.Request.Context(), wsID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not list categories")
 		return
 	}
-	catNames := map[string]string{}
-	for _, cat := range cats {
-		catNames[cat.ID] = cat.Name
-	}
 
-	csrf := strings.TrimSpace(c.GetHeader("X-CSRF-Token"))
-	if csrf == "" {
-		csrf = GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
-	}
+	csrf := h.csrfForRows(c)
+
 	rows := make([]txRowVM, 0, len(result.Items))
 	for _, item := range result.Items {
-		rows = append(rows, txRowVM{
-			ID:       item.ID,
-			Occurred: item.OccurredAt.Format("2006-01-02"),
-			Type:     string(item.Type),
-			Category: categoryName(item.CategoryID, catNames),
-			Amount:   formatMinor(item.AmountMinor),
-			Currency: item.Currency,
-			Note:     optionalString(item.Note),
-			Tags:     strings.Join(item.Tags, ", "),
-			CSRF:     csrf,
-		})
+		rows = append(rows, txRowFromModel(item, catNames, csrf))
 	}
 
 	p := buildPagination(filtersVM.Offset, result.Limit, len(result.Items), result.HasNext)
@@ -183,41 +266,8 @@ func (h *Handlers) PostCreateTransaction(c *gin.Context) {
 		return
 	}
 
-	var errs []string
-
-	typ := transactions.NormalizeType(c.PostForm("type"))
-	if !transactions.ValidateType(typ) {
-		errs = append(errs, "Type must be income or expense")
-	}
-
-	minor, err := transactions.ParseAmountMinor(c.PostForm("amount"))
-	if err != nil {
-		errs = append(errs, "Amount must be a positive number (e.g. 12.34)")
-	}
-
-	currency, err := transactions.NormalizeCurrencyStrict(c.PostForm("currency"))
-	if err != nil {
-		errs = append(errs, "Currency must be 3 uppercase letters (e.g. UAH)")
-	}
-
-	occurredAt, err := transactions.ParseOccurredAt(c.PostForm("occurred_at"))
-	if err != nil {
-		errs = append(errs, "Occurred at must be a valid date")
-	}
-
-	catRaw := strings.TrimSpace(c.PostForm("category_id"))
-	catID, err := transactions.NormalizeOptionalUUID(&catRaw)
-	if err != nil {
-		errs = append(errs, "Category id is invalid")
-	}
-
-	noteRaw := strings.TrimSpace(c.PostForm("note"))
-	note := transactions.NormalizeOptionalNote(&noteRaw)
-
-	tags, err := transactions.ParseTagsCSV(c.PostForm("tags"))
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
+	in := readTxForm(c)
+	typ, minor, currency, occurredAt, catID, note, tags, errs := parseTxForm(in)
 
 	if len(errs) > 0 {
 		c.Status(http.StatusUnprocessableEntity)
@@ -241,28 +291,9 @@ func (h *Handlers) PostCreateTransaction(c *gin.Context) {
 		return
 	}
 
-	cats, _ := h.Categories.List(c.Request.Context(), wsID)
-	catNames := map[string]string{}
-	for _, cat := range cats {
-		catNames[cat.ID] = cat.Name
-	}
+	_, catNames, _ := h.loadCategoriesMap(c.Request.Context(), wsID)
 
-	csrf := strings.TrimSpace(c.GetHeader("X-CSRF-Token"))
-	if csrf == "" {
-		csrf = GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
-	}
-	row := txRowVM{
-		ID:       out.ID,
-		Occurred: out.OccurredAt.Format("2006-01-02"),
-		Type:     string(out.Type),
-		Category: categoryName(out.CategoryID, catNames),
-		Amount:   formatMinor(out.AmountMinor),
-		Currency: out.Currency,
-		Note:     optionalString(out.Note),
-		Tags:     strings.Join(out.Tags, ", "),
-		CSRF:     csrf,
-	}
-
+	row := txRowFromModel(out, catNames, h.csrfForRows(c))
 	h.renderPartial(c, "tx_create_response", gin.H{"Row": row})
 }
 
@@ -312,9 +343,10 @@ func (h *Handlers) GetTransactionEdit(c *gin.Context) {
 		Tags:       strings.Join(tx.Tags, ", "),
 	}
 
-	h.renderPartial(c, "tx_row_edit", gin.H{
+	h.renderPartial(c, "tx_row_edit_response", gin.H{
 		"Row":        row,
 		"Categories": cats,
+		"CSRF":       h.csrfForRows(c),
 	})
 }
 
@@ -336,47 +368,14 @@ func (h *Handlers) PostUpdateTransaction(c *gin.Context) {
 		return
 	}
 
-	var errs []string
-
-	typ := transactions.NormalizeType(c.PostForm("type"))
-	if !transactions.ValidateType(typ) {
-		errs = append(errs, "Type must be income or expense")
-	}
-
-	minor, err := transactions.ParseAmountMinor(c.PostForm("amount"))
-	if err != nil {
-		errs = append(errs, "Amount must be a positive number (e.g. 12.34)")
-	}
-
-	currency, err := transactions.NormalizeCurrencyStrict(c.PostForm("currency"))
-	if err != nil {
-		errs = append(errs, "Currency must be 3 uppercase letters (e.g. UAH)")
-	}
-
-	occurredAt, err := transactions.ParseOccurredAt(c.PostForm("occurred_at"))
-	if err != nil {
-		errs = append(errs, "Occurred at must be a valid date")
-	}
-
-	catRaw := strings.TrimSpace(c.PostForm("category_id"))
-	catIDPtr, err := transactions.NormalizeOptionalUUID(&catRaw)
-	if err != nil {
-		errs = append(errs, "Category id is invalid")
-	}
-
-	noteRaw := strings.TrimSpace(c.PostForm("note"))
-	note := transactions.NormalizeOptionalNote(&noteRaw)
-
-	tags, err := transactions.ParseTagsCSV(c.PostForm("tags"))
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	cats, errCats := h.Categories.List(c.Request.Context(), wsID)
+	cats, catNames, errCats := h.loadCategoriesMap(c.Request.Context(), wsID)
 	if errCats != nil {
 		c.String(http.StatusInternalServerError, "could not list categories")
 		return
 	}
+
+	in := readTxForm(c)
+	typ, minor, currency, occurredAt, catIDPtr, note, tags, errs := parseTxForm(in)
 
 	if len(errs) > 0 {
 		catID := ""
@@ -385,13 +384,13 @@ func (h *Handlers) PostUpdateTransaction(c *gin.Context) {
 		}
 		row := txRowEditVM{
 			ID:         txID,
-			Occurred:   strings.TrimSpace(c.PostForm("occurred_at")),
+			Occurred:   strings.TrimSpace(in.OccurredAt),
 			Type:       string(typ),
 			CategoryID: catID,
-			Amount:     strings.TrimSpace(c.PostForm("amount")),
-			Currency:   strings.TrimSpace(c.PostForm("currency")),
+			Amount:     strings.TrimSpace(in.Amount),
+			Currency:   strings.TrimSpace(in.Currency),
 			Note:       optionalString(note),
-			Tags:       strings.TrimSpace(c.PostForm("tags")),
+			Tags:       strings.TrimSpace(in.Tags),
 		}
 		c.Status(http.StatusUnprocessableEntity)
 		h.renderPartial(c, "tx_update_error", gin.H{
@@ -418,27 +417,7 @@ func (h *Handlers) PostUpdateTransaction(c *gin.Context) {
 		return
 	}
 
-	catNames := map[string]string{}
-	for _, cat := range cats {
-		catNames[cat.ID] = cat.Name
-	}
-
-	csrf := strings.TrimSpace(c.GetHeader("X-CSRF-Token"))
-	if csrf == "" {
-		csrf = GenerateCSRF(h.CSRFSecret, h.CSRFTTL)
-	}
-	row := txRowVM{
-		ID:       out.ID,
-		Occurred: out.OccurredAt.Format("2006-01-02"),
-		Type:     string(out.Type),
-		Category: categoryName(out.CategoryID, catNames),
-		Amount:   formatMinor(out.AmountMinor),
-		Currency: out.Currency,
-		Note:     optionalString(out.Note),
-		Tags:     strings.Join(out.Tags, ", "),
-		CSRF:     csrf,
-	}
-
+	row := txRowFromModel(out, catNames, h.csrfForRows(c))
 	h.renderPartial(c, "tx_update_response", gin.H{"Row": row})
 }
 
@@ -533,6 +512,10 @@ func buildTxListFilter(vm txFiltersVM) (transactions.ListFilter, error) {
 		f.To = &t
 	}
 
+	if err := transactions.ValidateDateRange(f.From, f.To); err != nil {
+		return transactions.ListFilter{}, fmt.Errorf("invalid range")
+	}
+
 	if vm.Type != "" {
 		typ := transactions.NormalizeType(vm.Type)
 		if !transactions.ValidateType(typ) {
@@ -558,6 +541,9 @@ func buildTxListFilter(vm txFiltersVM) (transactions.ListFilter, error) {
 	f.Limit = vm.Limit
 	f.Offset = vm.Offset
 	f.Sort = vm.Sort
+	if f.Sort == "" {
+		f.Sort = "occurred_at_desc"
+	}
 	return f, nil
 }
 

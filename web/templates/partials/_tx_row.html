@@ -1,31 +1,33 @@
 {{ define "tx_row" }}
 <tr id="tx-{{ .ID }}">
-  <td>{{ .Occurred }}</td>
-  <td>{{ .Type }}</td>
-  <td>{{ .Category }}</td>
-  <td>{{ .Amount }} {{ .Currency }}</td>
-  <td>
-    {{ .Note }}
-    {{ if .Tags }}
-    <div style="font-size: 12px; opacity: 0.75; margin-top: 4px;">{{ .Tags }}</div>
-    {{ end }}
+  <td class="tx-td-date">{{ .Occurred }}</td>
+  <td class="tx-td-type">{{ .Type }}</td>
+  <td class="tx-td-category">{{ .Category }}</td>
+  <td class="tx-td-amount">{{ .Amount }} <span class="tx-currency">{{ .Currency }}</span></td>
+  <td class="tx-td-note">
+    {{ if .Note }}<div class="tx-note">{{ .Note }}</div>{{ else }}<span class="tx-muted">—</span>{{ end }}
+    {{ if .Tags }}<div class="tx-tags">{{ .Tags }}</div>{{ end }}
   </td>
-  <td>
-    <button type="button"
-            hx-get="/app/transactions/{{ .ID }}/edit"
-            hx-target="#tx-{{ .ID }}"
+  <td class="tx-td-actions">
+    <div class="tx-edit-actions">
+      <button class="tx-btn tx-btn--primary" type="button"
+              hx-get="/app/transactions/{{ .ID }}/edit"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
+        Edit
+      </button>
+
+      <form class="tx-action-form"
+            hx-post="/app/transactions/{{ .ID }}/delete"
+            hx-target="closest tr"
             hx-swap="outerHTML"
-            style="margin-right: 8px;">
-      Edit
-    </button>
-    <form hx-post="/app/transactions/{{ .ID }}/delete"
-          hx-target="#tx-{{ .ID }}"
-          hx-swap="outerHTML"
-          hx-confirm="Delete this transaction?"
-          method="post" style="margin: 0;">
-      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
-      <button type="submit">Delete</button>
-    </form>
+            hx-confirm="Delete this transaction?"
+            method="post">
+        <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+        <button class="tx-btn tx-btn--danger" type="submit">Delete</button>
+      </form>
+    </div>
   </td>
+
 </tr>
 {{ end }}

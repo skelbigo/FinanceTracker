@@ -20,7 +20,7 @@ func (r *Renderer) Render(c *gin.Context, page string, data gin.H) {
 	layout := filepath.Join(r.templatesDir, "layout.html")
 
 	partials, _ := filepath.Glob(filepath.Join(r.templatesDir, "partials", "*.html"))
-
+	
 	pagePath := filepath.Join(r.templatesDir, page)
 
 	files := []string{layout, pagePath}

@@ -1,10 +1,27 @@
 {{ define "content" }}
-<section style="max-width: 720px; margin: 0 auto; padding: 24px;">
-    <h1 style="margin: 0 0 12px 0;">No active workspace</h1>
-    <p style="margin: 0 0 18px 0; opacity: 0.9;">To work with transactions, first create a workspace.</p>
+<section class="empty-wrap" aria-label="No active workspace">
+    <div class="empty-icon" aria-hidden="true">
+        <svg class="empty-icon-svg" width="220" height="150" viewBox="0 0 220 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g opacity="0.65" transform="translate(20 10)">
+                <path d="M34 46C34 40.4772 38.4772 36 44 36H78L90 48H156C161.523 48 166 52.4772 166 58V106C166 111.523 161.523 116 156 116H44C38.4772 116 34 111.523 34 106V46Z"
+                      stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+                <path d="M34 58H166" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+            </g>
 
-    <a class="btn" href="/app/workspaces" style="display: inline-block; padding: 10px 14px; border: 1px solid #ddd; border-radius: 10px; text-decoration: none;">
-        Go to Workspaces
-    </a>
+            <g transform="translate(40 24)">
+                <path d="M34 46C34 40.4772 38.4772 36 44 36H78L90 48H156C161.523 48 166 52.4772 166 58V106C166 111.523 161.523 116 156 116H44C38.4772 116 34 111.523 34 106V46Z"
+                      stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+                <path d="M34 58H166" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+            </g>
+        </svg>
+    </div>
+
+    <h1 class="empty-title">No active workspace</h1>
+    <p class="empty-sub">
+        Create or select a workspace to start tracking your finances.
+        Workspaces let you keep accounts separate or share them with others.
+    </p>
+
+    <a class="empty-cta" href="/app/workspaces">Go to Workspaces</a>
 </section>
 {{ end }}

@@ -151,7 +151,7 @@ func (h *Handler) list(c *gin.Context) {
 		}
 		f.To = &t
 	}
-	if f.From != nil && f.To != nil && f.From.After(*f.To) {
+	if err := ValidateDateRange(f.From, f.To); err != nil {
 		httpx.Unprocessable(c, "invalid range", map[string]string{"range": "from must be <= to"})
 		return
 	}
