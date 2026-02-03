@@ -1,0 +1,58 @@
+{{ define "budget_row" }}
+<tr id="budget-{{ .ID }}" class="{{ if .IsOver }}budget-row--over{{ end }}">
+    <td>
+        {{ .Category }}
+        <input type="hidden" form="bud-upd-{{ .ID }}" name="category_id" value="{{ .CategoryID }}">
+    </td>
+
+    <td>
+        <select class="tx-control tx-control--select" form="bud-upd-{{ .ID }}" name="period" required>
+            <option value="month" {{ if eq .Period "month" }}selected{{ end }}>Month</option>
+            <option value="week"  {{ if eq .Period "week" }}selected{{ end }}>Week</option>
+        </select>
+    </td>
+
+    <td class="tx-th-amount">
+        <input class="tx-control" form="bud-upd-{{ .ID }}" name="limit" type="text" inputmode="decimal"
+               pattern="^[0-9]+([\.,][0-9]{1,2})?$"
+               value="{{ .Limit }}" required>
+        <input class="tx-control tx-control--xs" form="bud-upd-{{ .ID }}" name="currency" maxlength="3" value="{{ .Currency }}" required>
+    </td>
+
+    <td class="tx-th-amount">{{ .Spent }} {{ .Currency }}</td>
+    <td class="tx-th-amount">{{ .Remaining }} {{ .Currency }}</td>
+
+    <td>
+        <progress value="{{ .PercentBar }}" max="100"></progress>
+        <span>{{ .PercentUsed }}%</span>
+    </td>
+
+    <td>{{ .Status }}</td>
+
+    <td class="tx-td-actions">
+        <form id="bud-upd-{{ .ID }}"
+              method="post"
+              hx-post="/app/budgets/{{ .ID }}/update"
+              hx-target="#budget-{{ .ID }}"
+              hx-select="tr"
+              hx-swap="outerHTML"
+              hx-select-oob="#budget-errors"
+              class="tx-action-form" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+            <button class="tx-btn tx-btn--ghost" type="submit">Save</button>
+        </form>
+
+        <form class="tx-action-form" method="post"
+              hx-post="/app/budgets/{{ .ID }}/delete"
+              hx-target="#budget-{{ .ID }}"
+              hx-select="tr"
+              hx-swap="outerHTML"
+              hx-select-oob="#budget-errors"
+              hx-confirm="Delete this budget?"
+              style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+            <button class="tx-btn tx-btn--danger" type="submit">Delete</button>
+        </form>
+    </td>
+</tr>
+{{ end }}

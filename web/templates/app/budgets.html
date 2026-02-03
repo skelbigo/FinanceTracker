@@ -9,7 +9,14 @@
   <div id="budget-errors" class="tx-errors"></div>
 
   <div class="tx-block tx-block--form">
-    <form id="budget-create" method="post" action="/app/budgets">
+    <form id="budget-create"
+          method="post"
+          hx-post="/app/budgets"
+          hx-target="#budget-tbody"
+          hx-select="#budget-fragment tr"
+          hx-select-oob="#budget-errors,#budget-empty"
+          hx-swap="beforeend">
+
       <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
 
       <div class="tx-bar" role="group" aria-label="Add budget">
@@ -47,25 +54,15 @@
         <th scope="col" class="tx-th-amount">Remaining</th>
         <th scope="col">Progress</th>
         <th scope="col">Status</th>
+        <th scope="col" class="tx-th-actions">Actions</th>
       </tr>
       </thead>
 
-      <tbody>
+      <tbody id="budget-tbody">
       {{ range .Budgets }}
-      <tr id="budget-{{ .ID }}" class="{{ if .IsOver }}budget-row--over{{ end }}">
-        <td>{{ .Category }}</td>
-        <td>{{ .Period }}</td>
-        <td class="tx-th-amount">{{ .Limit }} {{ .Currency }}</td>
-        <td class="tx-th-amount">{{ .Spent }} {{ .Currency }}</td>
-        <td class="tx-th-amount">{{ .Remaining }} {{ .Currency }}</td>
-        <td>
-          <progress value="{{ .PercentBar }}" max="100"></progress>
-          <span>{{ .PercentUsed }}%</span>
-        </td>
-        <td>{{ .Status }}</td>
-      </tr>
+      {{ template "budget_row" . }}
       {{ else }}
-      <tr><td colspan="7">No budgets</td></tr>
+      <tr id="budget-empty"><td colspan="8">No budgets</td></tr>
       {{ end }}
       </tbody>
     </table>

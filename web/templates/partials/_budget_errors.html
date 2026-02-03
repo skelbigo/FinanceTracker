@@ -1,0 +1,13 @@
+{{ define "budget_errors" }}
+<div id="budget-errors" hx-swap-oob="true" class="tx-errors">
+  {{ range .Errors }}
+  <div class="error">{{ . }}</div>
+  {{ else }}
+  {{/* no errors */}}
+  {{ end }}
+</div>
+{{ end }}
+
+{{ define "budget_clear_errors" }}
+<div id="budget-errors" hx-swap-oob="true" class="tx-errors"></div>
+{{ end }}
