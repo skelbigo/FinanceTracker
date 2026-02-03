@@ -27,7 +27,15 @@
         <span>{{ .PercentUsed }}%</span>
     </td>
 
-    <td>{{ .Status }}</td>
+    <td>
+        <span class="bud-status {{ if .IsOver }}bud-status--over{{ else }}bud-status--ok{{ end }}">{{ .Status }}</span>
+        {{ if .IsOver }}
+        <div class="bud-overby">Over by: {{ .OverBy }} {{ .Currency }}</div>
+        {{ if and .PeriodStart .PeriodEnd }}
+        <a class="tx-link bud-view-link" href="/app/transactions?from={{ .PeriodStart }}&to={{ .PeriodEnd }}&category_id={{ .CategoryID }}&type=expense">view transactions</a>
+        {{ end }}
+        {{ end }}
+    </td>
 
     <td class="tx-td-actions">
         <form id="bud-upd-{{ .ID }}"

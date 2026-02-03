@@ -901,6 +901,40 @@ body.auth::after {
     background: rgba(32, 242, 200, 0.05);
 }
 
+/* Budgets */
+.tx-table tbody tr.budget-row--over {
+    outline: 1px solid rgba(255, 80, 80, 0.45);
+    outline-offset: -1px;
+}
+
+.tx-table tbody tr.budget-row--over:hover {
+    background: rgba(255, 80, 80, 0.06);
+}
+
+.bud-status {
+    font-weight: 800;
+}
+
+.bud-status--over {
+    color: rgba(255, 140, 140, 0.92);
+}
+
+.bud-status--ok {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.bud-overby {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+.bud-view-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
 .tx-td-amount {
     text-align: right;
     white-space: nowrap;

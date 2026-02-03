@@ -24,6 +24,9 @@ type BudgetRowVM struct {
 	Limit       string
 	Spent       string
 	Remaining   string
+	OverBy      string
+	PeriodStart string
+	PeriodEnd   string
 	PercentUsed int
 	PercentBar  int
 	IsOver      bool
@@ -51,6 +54,24 @@ func budgetRowFromResponse(b budgets.BudgetResponse, catNames map[string]string,
 		status = "Overspent"
 	}
 
+	overBy := ""
+	if b.IsOver {
+		ob := b.SpentMinor - b.AmountLimitMinor
+		if ob < 0 {
+			ob = -ob
+		}
+		overBy = formatMinor(ob)
+	}
+
+	periodFrom := ""
+	periodTo := ""
+	if !b.PeriodStart.IsZero() {
+		periodFrom = b.PeriodStart.Format("2006-01-02")
+	}
+	if !b.PeriodEnd.IsZero() {
+		periodTo = b.PeriodEnd.AddDate(0, 0, -1).Format("2006-01-02")
+	}
+
 	return BudgetRowVM{
 		ID:          b.ID.String(),
 		CategoryID:  catID,
@@ -60,6 +81,9 @@ func budgetRowFromResponse(b budgets.BudgetResponse, catNames map[string]string,
 		Limit:       formatMinor(b.AmountLimitMinor),
 		Spent:       formatMinor(b.SpentMinor),
 		Remaining:   formatMinor(b.RemainingMinor),
+		OverBy:      overBy,
+		PeriodStart: periodFrom,
+		PeriodEnd:   periodTo,
 		PercentUsed: b.PercentUsed,
 		PercentBar:  bar,
 		IsOver:      b.IsOver,
@@ -132,6 +156,9 @@ func budgetRowData(row BudgetRowVM) gin.H {
 		"Limit":       row.Limit,
 		"Spent":       row.Spent,
 		"Remaining":   row.Remaining,
+		"OverBy":      row.OverBy,
+		"PeriodStart": row.PeriodStart,
+		"PeriodEnd":   row.PeriodEnd,
 		"PercentUsed": row.PercentUsed,
 		"PercentBar":  row.PercentBar,
 		"IsOver":      row.IsOver,
