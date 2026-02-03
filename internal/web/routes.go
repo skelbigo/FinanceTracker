@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
@@ -16,6 +17,7 @@ type Handlers struct {
 	Auth         *auth.Service
 	Workspaces   *workspaces.Service
 	Categories   *categories.Service
+	Budgets      *budgets.Service
 	Transactions *transactions.Service
 	JWTM         *auth.JWTManager
 

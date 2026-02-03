@@ -1,0 +1,74 @@
+{{ define "content" }}
+<section class="tx-wrap" aria-label="Budgets">
+  <div class="tx-nav">
+    <a class="tx-link" href="/app/transactions">← Back to Transactions</a>
+  </div>
+
+  <h1 class="tx-title">Budgets</h1>
+
+  <div id="budget-errors" class="tx-errors"></div>
+
+  <div class="tx-block tx-block--form">
+    <form id="budget-create" method="post" action="/app/budgets">
+      <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+
+      <div class="tx-bar" role="group" aria-label="Add budget">
+        <select class="tx-control tx-control--select" name="category_id" required>
+          <option value="">Category</option>
+          {{ range .Categories }}
+          <option value="{{ .ID }}">{{ .Name }}</option>
+          {{ end }}
+        </select>
+
+        <select class="tx-control tx-control--select" name="period" required>
+          <option value="month">Month</option>
+          <option value="week">Week</option>
+        </select>
+
+        <input class="tx-control" name="limit" type="text" inputmode="decimal"
+               pattern="^[0-9]+([\.,][0-9]{1,2})?$"
+               placeholder="Limit (e.g. 200.00)" required>
+
+        <input class="tx-control tx-control--xs" name="currency" value="{{ .DefaultCurrency }}" maxlength="3" required>
+
+        <button class="tx-btn tx-btn--primary" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="tx-table-wrap" role="region" aria-label="Budgets table" tabindex="0">
+    <table class="tx-table">
+      <thead>
+      <tr>
+        <th scope="col">Category</th>
+        <th scope="col">Period</th>
+        <th scope="col" class="tx-th-amount">Limit</th>
+        <th scope="col" class="tx-th-amount">Spent</th>
+        <th scope="col" class="tx-th-amount">Remaining</th>
+        <th scope="col">Progress</th>
+        <th scope="col">Status</th>
+      </tr>
+      </thead>
+
+      <tbody>
+      {{ range .Budgets }}
+      <tr id="budget-{{ .ID }}" class="{{ if .IsOver }}budget-row--over{{ end }}">
+        <td>{{ .Category }}</td>
+        <td>{{ .Period }}</td>
+        <td class="tx-th-amount">{{ .Limit }} {{ .Currency }}</td>
+        <td class="tx-th-amount">{{ .Spent }} {{ .Currency }}</td>
+        <td class="tx-th-amount">{{ .Remaining }} {{ .Currency }}</td>
+        <td>
+          <progress value="{{ .PercentBar }}" max="100"></progress>
+          <span>{{ .PercentUsed }}%</span>
+        </td>
+        <td>{{ .Status }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="7">No budgets</td></tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ end }}

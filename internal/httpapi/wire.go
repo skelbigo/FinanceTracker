@@ -40,7 +40,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	catSvc := categories.NewService(catRepo)
 	catH := categories.NewHandler(catSvc, authMW, wsRepo)
 
-	// budgets (created before transactions so transactions can call budget overspend checks)
+	// budgets
 	bRepo := budgets.NewRepo(pool)
 	catLookup := budgets.NewCategoryLookup(pool)
 	bSvc := budgets.NewService(bRepo, catLookup, cfg.BudgetsEnforceExpenseCategories)
@@ -71,6 +71,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 		WorkspacesSvc:   wsSvc,
 		CategoriesSvc:   catSvc,
+		BudgetsSvc:      bSvc,
 		TransactionsSvc: txSvc,
 
 		Auth:         authH,

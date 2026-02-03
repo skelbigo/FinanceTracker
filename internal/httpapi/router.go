@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
@@ -41,6 +42,7 @@ type RouterDeps struct {
 
 	WorkspacesSvc   *workspaces.Service
 	CategoriesSvc   *categories.Service
+	BudgetsSvc      *budgets.Service
 	TransactionsSvc *transactions.Service
 
 	Auth         RoutesRegistrar
@@ -85,6 +87,7 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 		Auth:         deps.AuthSvc,
 		Workspaces:   deps.WorkspacesSvc,
 		Categories:   deps.CategoriesSvc,
+		Budgets:      deps.BudgetsSvc,
 		Transactions: deps.TransactionsSvc,
 		JWTM:         deps.JWTM,
 		CookieCfg:    deps.CookieCfg,
