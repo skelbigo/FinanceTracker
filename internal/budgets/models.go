@@ -48,15 +48,14 @@ type BudgetResponse struct {
 }
 
 type BudgetEvent struct {
-	WorkspaceID  uuid.UUID `json:"workspace_id"`
-	BudgetID     uuid.UUID `json:"budget_id"`
-	CategoryID   uuid.UUID `json:"category_id"`
-	PeriodStart  time.Time `json:"period_start"`
-	PeriodEnd    time.Time `json:"period_end"`
-	SpentMinor   int64     `json:"spent_minor"`
-	LimitMinor   int64     `json:"limit_minor"`
-	Currency     string    `json:"currency"`
-	CreatedAtUTC time.Time `json:"created_at"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	BudgetID    uuid.UUID `json:"budget_id"`
+	CategoryID  uuid.UUID `json:"category_id"`
+	PeriodStart time.Time `json:"period_start"`
+	PeriodEnd   time.Time `json:"period_end"`
+	SpentMinor  int64     `json:"spent_minor"`
+	LimitMinor  int64     `json:"limit_minor"`
+	Currency    string    `json:"currency"`
 }
 
 func NewBudgetResponse(b Budget, spent int64, periodStart, periodEnd time.Time) BudgetResponse {

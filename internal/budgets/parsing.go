@@ -68,9 +68,8 @@ func parseBudgetUUID(c *gin.Context) (uuid.UUID, bool) {
 
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		httpx.BadRequest(c, "invalid budgetId id", map[string]string{"budgetId": "must be uuid"})
+		httpx.BadRequest(c, "invalid budget id", map[string]string{"budgetId": "must be uuid"})
 		return uuid.UUID{}, false
 	}
-
 	return id, true
 }

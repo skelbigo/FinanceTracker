@@ -149,15 +149,14 @@ func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uu
 		if spent > b.AmountLimitMinor {
 			overspent = true
 			ev := BudgetEvent{
-				WorkspaceID:  workspaceID,
-				BudgetID:     b.ID,
-				CategoryID:   b.CategoryID,
-				PeriodStart:  start,
-				PeriodEnd:    end,
-				SpentMinor:   spent,
-				LimitMinor:   b.AmountLimitMinor,
-				Currency:     b.Currency,
-				CreatedAtUTC: time.Now().UTC(),
+				WorkspaceID: workspaceID,
+				BudgetID:    b.ID,
+				CategoryID:  b.CategoryID,
+				PeriodStart: start,
+				PeriodEnd:   end,
+				SpentMinor:  spent,
+				LimitMinor:  b.AmountLimitMinor,
+				Currency:    b.Currency,
 			}
 			if err := s.repo.InsertBudgetEvent(ctx, ev); err != nil {
 				return false, err
