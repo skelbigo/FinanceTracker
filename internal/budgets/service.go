@@ -16,7 +16,9 @@ type BudgetRepo interface {
 	DeleteBudget(ctx context.Context, workspaceID, budgetID uuid.UUID) error
 	GetBudgetByID(ctx context.Context, workspaceID, budgetID uuid.UUID) (Budget, error)
 	List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error)
+	ListByCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string) ([]Budget, error)
 	GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error)
+	InsertBudgetEvent(ctx context.Context, ev BudgetEvent) error
 }
 
 type CategoryLookup interface {
@@ -121,4 +123,47 @@ func (s *Service) ListWithProgress(ctx context.Context, workspaceID uuid.UUID, p
 		out = append(out, NewBudgetResponse(b, spent, start, end))
 	}
 	return out, nil
+}
+
+func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error) {
+	cur := normalizeCurrency(currency)
+	if !currencyRe.MatchString(cur) {
+		return false, fmt.Errorf("%w: %q", ErrInvalidCurrency, currency)
+	}
+
+	budgets, err := s.repo.ListByCategory(ctx, workspaceID, categoryID, cur)
+	if err != nil {
+		return false, err
+	}
+	if len(budgets) == 0 {
+		return false, nil
+	}
+
+	overspent := false
+	for _, b := range budgets {
+		start, end := PeriodBounds(now, b.Period)
+		spent, err := s.repo.GetSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
+		if err != nil {
+			return false, err
+		}
+		if spent > b.AmountLimitMinor {
+			overspent = true
+			ev := BudgetEvent{
+				WorkspaceID:  workspaceID,
+				BudgetID:     b.ID,
+				CategoryID:   b.CategoryID,
+				PeriodStart:  start,
+				PeriodEnd:    end,
+				SpentMinor:   spent,
+				LimitMinor:   b.AmountLimitMinor,
+				Currency:     b.Currency,
+				CreatedAtUTC: time.Now().UTC(),
+			}
+			if err := s.repo.InsertBudgetEvent(ctx, ev); err != nil {
+				return false, err
+			}
+		}
+	}
+
+	return overspent, nil
 }

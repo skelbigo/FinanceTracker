@@ -16,7 +16,6 @@ type Repo struct {
 func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 
 func (r *Repo) Create(ctx context.Context, t Transaction) (Transaction, error) {
-	// Avoid inserting NULL into NOT NULL text[] column.
 	if t.Tags == nil {
 		t.Tags = []string{}
 	}
@@ -44,10 +43,10 @@ type ListFilter struct {
 	To         *time.Time
 	Type       *Type
 	CategoryID *string
-	Search     *string // search in note (ILIKE) or exact tag match
-	Limit      int     // page size (service will query Limit+1)
+	Search     *string
+	Limit      int
 	Offset     int
-	Sort       string // occurred_at_desc, occurred_at_asc, amount_desc, amount_asc
+	Sort       string
 }
 
 func orderByFromSort(sort string) string {

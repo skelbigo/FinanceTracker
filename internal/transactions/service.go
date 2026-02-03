@@ -1,12 +1,24 @@
 package transactions
 
-import "context"
+import (
+	"context"
+	"github.com/google/uuid"
+	"log"
+	"time"
+)
 
-type Service struct {
-	repo *Repo
+type OverspendChecker interface {
+	CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error)
 }
 
-func NewService(repo *Repo) *Service { return &Service{repo: repo} }
+type Service struct {
+	repo    *Repo
+	budgetC OverspendChecker
+}
+
+func NewService(repo *Repo, budgetChecker OverspendChecker) *Service {
+	return &Service{repo: repo, budgetC: budgetChecker}
+}
 
 type ListResult struct {
 	Items   []Transaction `json:"items"`
@@ -16,8 +28,13 @@ type ListResult struct {
 }
 
 func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error) {
+	out, err := s.repo.Create(ctx, t)
+	if err != nil {
+		return Transaction{}, err
+	}
 
-	return s.repo.Create(ctx, t)
+	s.checkOverspendBestEffort(ctx, out)
+	return out, nil
 }
 
 func (s *Service) List(ctx context.Context, workspaceID string, f ListFilter) (ListResult, error) {
@@ -61,9 +78,42 @@ func (s *Service) GetByID(ctx context.Context, workspaceID, txID string) (Transa
 }
 
 func (s *Service) Update(ctx context.Context, t Transaction) (Transaction, error) {
-	return s.repo.Update(ctx, t)
+	out, err := s.repo.Update(ctx, t)
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	s.checkOverspendBestEffort(ctx, out)
+	return out, nil
 }
 
 func (s *Service) Delete(ctx context.Context, workspaceID, txID string) (bool, error) {
 	return s.repo.Delete(ctx, workspaceID, txID)
+}
+
+func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) {
+	if s.budgetC == nil {
+		return
+	}
+	if tx.Type != TypeExpense {
+		return
+	}
+	if tx.CategoryID == nil {
+		return
+	}
+
+	wsID, err := uuid.Parse(tx.WorkspaceID)
+	if err != nil {
+		log.Printf("transactions: overspend check skipped (bad workspace_id=%q): %v", tx.WorkspaceID, err)
+		return
+	}
+	catID, err := uuid.Parse(*tx.CategoryID)
+	if err != nil {
+		log.Printf("transactions: overspend check skipped (bad category_id=%q): %v", *tx.CategoryID, err)
+		return
+	}
+
+	if _, err := s.budgetC.CheckOverspend(ctx, wsID, catID, tx.Currency, tx.OccurredAt); err != nil {
+		log.Printf("transactions: overspend check failed (workspace=%s category=%s): %v", wsID, catID, err)
+	}
 }
