@@ -13,6 +13,7 @@ type Repository interface {
 	Summary(ctx context.Context, workspaceID uuid.UUID, fromInclusive, toExclusive time.Time, currency string) (Summary, error)
 	ByCategory(ctx context.Context, workspaceID uuid.UUID, fromInclusive, toExclusive time.Time, currency string, typ TxType, top int) ([]CategoryTotalRow, int64, error)
 	Timeseries(ctx context.Context, workspaceID uuid.UUID, fromInclusive, toExclusive time.Time, currency string, bucket Bucket, typ TxType) ([]TimeseriesRow, error)
+	Cashflow(ctx context.Context, workspaceID uuid.UUID, fromInclusive, toExclusive time.Time, currency string, bucket Bucket) ([]CashflowRow, error)
 }
 
 type Repo struct {
@@ -151,6 +152,40 @@ ORDER BY period_start ASC;
 	for rows.Next() {
 		var row TimeseriesRow
 		if err := rows.Scan(&row.PeriodStart, &row.Total); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *Repo) Cashflow(ctx context.Context, workspaceID uuid.UUID, fromInclusive, toExclusive time.Time, currency string, bucket Bucket) ([]CashflowRow, error) {
+	const q = `
+SELECT
+	date_trunc($5, t.occurred_at)::date AS period_start,
+	COALESCE(SUM(CASE WHEN t.type = 'income'  THEN t.amount_minor ELSE 0 END), 0) AS income_total,
+	COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_minor ELSE 0 END), 0) AS expense_total
+FROM transactions t
+WHERE t.workspace_id = $1
+  AND t.currency     = $2
+  AND t.occurred_at >= $3
+  AND t.occurred_at <  $4
+GROUP BY period_start
+ORDER BY period_start ASC;
+`
+	rows, err := r.db.Query(ctx, q, workspaceID, currency, fromInclusive, toExclusive, string(bucket))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []CashflowRow
+	for rows.Next() {
+		var row CashflowRow
+		if err := rows.Scan(&row.PeriodStart, &row.IncomeTotal, &row.ExpenseTotal); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

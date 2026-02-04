@@ -1,0 +1,179 @@
+{{ define "content" }}
+<section class="tx-wrap" aria-label="Analytics">
+    <div class="tx-nav">
+        <a class="tx-link" href="/app">← Back to Dashboard</a>
+    </div>
+
+    <h1 class="tx-title">Analytics</h1>
+
+    <div class="tx-block tx-block--filters">
+        <div class="tx-block-title">Period</div>
+
+        <form id="analytics-form" method="get" action="/app/analytics">
+            <div class="tx-bar tx-bar--filters" role="group" aria-label="Analytics filters">
+                <select class="tx-control tx-control--select" name="period" id="analytics-period" aria-label="Period">
+                    <option value="this_month" {{ if eq .VM.Period "this_month" }}selected{{ end }}>This month</option>
+                    <option value="last_month" {{ if eq .VM.Period "last_month" }}selected{{ end }}>Last month</option>
+                    <option value="custom" {{ if eq .VM.Period "custom" }}selected{{ end }}>Custom range</option>
+                </select>
+
+                <span id="analytics-custom-range" style="display: inline-flex; gap: 10px; align-items: center;">
+          <input class="tx-control" type="date" name="from" id="analytics-from" value="{{ .VM.From }}" aria-label="From">
+          <input class="tx-control" type="date" name="to" id="analytics-to" value="{{ .VM.To }}" aria-label="To">
+        </span>
+
+                <select class="tx-control tx-control--select" name="g" id="analytics-g" aria-label="Granularity">
+                    <option value="" {{ if eq .VM.GranularityInput "auto" }}selected{{ end }}>Auto</option>
+                    <option value="day" {{ if eq .VM.GranularityInput "day" }}selected{{ end }}>Day</option>
+                    <option value="week" {{ if eq .VM.GranularityInput "week" }}selected{{ end }}>Week</option>
+                    <option value="month" {{ if eq .VM.GranularityInput "month" }}selected{{ end }}>Month</option>
+                </select>
+
+                <input class="tx-control tx-control--xs" name="cur" value="{{ .VM.Currency }}" maxlength="3" aria-label="Currency">
+
+                <button class="tx-btn tx-btn--primary" type="submit">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="tx-block">
+        <div class="tx-block-title">Totals</div>
+        <div class="tx-bar" role="group" aria-label="Totals" style="justify-content: space-between; align-items: stretch; gap: 18px;">
+            <div style="min-width: 180px;">
+                <div class="ws-label">Total income</div>
+                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
+                    {{ .VM.Income }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+                </div>
+            </div>
+
+            <div style="min-width: 180px;">
+                <div class="ws-label">Total expense</div>
+                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
+                    {{ .VM.Expense }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+                </div>
+            </div>
+
+            <div style="min-width: 180px;">
+                <div class="ws-label">Net (income − expense)</div>
+                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
+                    {{ .VM.Net }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tx-block">
+        <div class="tx-block-title">Cashflow chart ({{ .VM.Granularity }})</div>
+        <div class="tx-bar" style="padding: 16px;">
+            <div style="width: 100%; height: 360px;">
+                <script type="application/json" id="chart-data">{{ .VM.ChartJSON }}</script>
+                <canvas id="cashflowChart" aria-label="Cashflow chart" role="img"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="tx-block">
+        <div class="tx-block-title">Top categories (expense)</div>
+        <div class="tx-table-wrap" role="region" aria-label="Top categories" tabindex="0">
+            <table class="tx-table">
+                <thead>
+                <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col" class="tx-th-amount">Spent</th>
+                    <th scope="col" class="tx-th-amount">Share</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{ range .VM.Top }}
+                <tr>
+                    <td>{{ .Name }}</td>
+                    <td class="tx-th-amount">{{ .Spent }}</td>
+                    <td class="tx-th-amount">{{ .Percent }}</td>
+                </tr>
+                {{ else }}
+                <tr>
+                    <td colspan="3">No expense categories in this period.</td>
+                </tr>
+                {{ end }}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{/* Chart.js via CDN. If you want a local file, put it into web/static/chart.min.js and replace this src. */}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <script>
+        (function () {
+            var period = document.getElementById('analytics-period');
+            var customWrap = document.getElementById('analytics-custom-range');
+            var from = document.getElementById('analytics-from');
+            var to = document.getElementById('analytics-to');
+
+            function syncCustom() {
+                var isCustom = period && period.value === 'custom';
+                if (customWrap) customWrap.style.display = isCustom ? 'inline-flex' : 'none';
+                if (from) from.disabled = !isCustom;
+                if (to) to.disabled = !isCustom;
+            }
+            if (period) {
+                period.addEventListener('change', syncCustom);
+                syncCustom();
+            }
+
+            function renderChart() {
+                if (typeof Chart === 'undefined') {
+                    setTimeout(renderChart, 50);
+                    return;
+                }
+
+                var rawEl = document.getElementById('chart-data');
+                var canvas = document.getElementById('cashflowChart');
+                if (!rawEl || !canvas) return;
+
+                var payload;
+                try {
+                    payload = JSON.parse(rawEl.textContent || '{}');
+                } catch (e) {
+                    console.error('bad chart payload', e);
+                    return;
+                }
+
+                var ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: payload.labels || [],
+                        datasets: [
+                            { label: 'Income', data: payload.income || [], tension: 0.25, borderWidth: 2, pointRadius: 0 },
+                            { label: 'Expense', data: payload.expense || [], tension: 0.25, borderWidth: 2, pointRadius: 0 },
+                            { label: 'Net', data: payload.net || [], tension: 0.25, borderWidth: 2, pointRadius: 0 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: true },
+                            tooltip: { mode: 'index', intersect: false }
+                        },
+                        scales: {
+                            y: {
+                                ticks: {
+                                    callback: function (v) {
+                                        var cur = payload.currency || '';
+                                        return cur ? (v + ' ' + cur) : v;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderChart();
+        })();
+    </script>
+</section>
+{{ end }}

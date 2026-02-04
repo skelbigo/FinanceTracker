@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_transactions_ws_currency_occurred;

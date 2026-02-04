@@ -38,3 +38,9 @@ type TimeseriesRow struct {
 	PeriodStart time.Time
 	Total       int64
 }
+
+type CashflowRow struct {
+	PeriodStart  time.Time
+	IncomeTotal  int64
+	ExpenseTotal int64
+}

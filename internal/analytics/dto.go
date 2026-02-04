@@ -39,3 +39,37 @@ type TimeseriesResponse struct {
 	Type     string            `json:"type"`
 	Points   []TimeseriesPoint `json:"points"`
 }
+
+type AnalyticsRange struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	GroupBy string `json:"groupBy"`
+}
+
+type AnalyticsTotals struct {
+	Income  int64 `json:"income"`
+	Expense int64 `json:"expense"`
+	Net     int64 `json:"net"`
+}
+
+type AnalyticsTopCategory struct {
+	CategoryID *string `json:"categoryId"`
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Total      int64   `json:"total"`
+	Share      float64 `json:"share"`
+}
+
+type AnalyticsCashflowPoint struct {
+	Bucket  string `json:"bucket"`
+	Income  int64  `json:"income"`
+	Expense int64  `json:"expense"`
+	Net     int64  `json:"net"`
+}
+
+type AnalyticsResponse struct {
+	Range         AnalyticsRange           `json:"range"`
+	Totals        AnalyticsTotals          `json:"totals"`
+	TopCategories []AnalyticsTopCategory   `json:"topCategories"`
+	Cashflow      []AnalyticsCashflowPoint `json:"cashflow"`
+}

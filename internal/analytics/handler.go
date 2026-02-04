@@ -25,9 +25,44 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g.Use(h.authMW)
 	g.Use(workspaces.RequireWorkspaceRole(h.wsRepo, workspaces.RoleViewer))
 
+	g.GET("", h.analytics)
+
 	g.GET("/summary", h.summary)
 	g.GET("/by-category", h.byCategory)
 	g.GET("/timeseries", h.timeseries)
+}
+
+func (h *Handler) analytics(c *gin.Context) {
+	workspaceID, ok := mustWorkspaceUUID(c)
+	if !ok {
+		return
+	}
+
+	from := c.Query("from")
+	to := c.Query("to")
+	currency := c.Query("currency")
+
+	groupBy := c.Query("groupBy")
+	if groupBy == "" {
+		groupBy = c.Query("bucket")
+	}
+
+	top := 0
+	if topStr := c.Query("top"); topStr != "" {
+		v, err := strconv.Atoi(topStr)
+		if err != nil {
+			writeErr(c, ErrInvalidTop)
+			return
+		}
+		top = v
+	}
+
+	resp, err := h.svc.Analytics(c.Request.Context(), workspaceID, from, to, currency, groupBy, top)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+	c.JSON(200, resp)
 }
 
 func (h *Handler) summary(c *gin.Context) {
