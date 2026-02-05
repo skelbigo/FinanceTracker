@@ -59,7 +59,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	// analytics
 	aRepo := analytics.NewRepo(pool)
-	aSvc := analytics.NewService(aRepo)
+	aSvc := analytics.NewService(aRepo, rdb, aCacheIndex, cfg.AnalyticsCacheTTL())
 	aH := analytics.NewHandler(aSvc, authMW, wsRepo)
 
 	return RouterDeps{

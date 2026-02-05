@@ -121,3 +121,37 @@ func (c *Client) Del(ctx context.Context, keys ...string) error {
 	_, err := c.Pipeline(ctx, args)
 	return err
 }
+
+func (c *Client) Get(ctx context.Context, key string) (val string, found bool, err error) {
+	if strings.TrimSpace(key) == "" {
+		return "", false, nil
+	}
+	replies, err := c.Pipeline(ctx, []string{"GET", key})
+	if err != nil {
+		return "", false, err
+	}
+	if len(replies) != 1 {
+		return "", false, errors.New("redis: unexpected reply count")
+	}
+	s, ok := replies[0].(string)
+	if !ok {
+		return "", false, errors.New("redis: expected bulk string reply")
+	}
+	if s == "" {
+		// Our RESP decoder returns empty string for nil bulk replies ($-1).
+		return "", false, nil
+	}
+	return s, true, nil
+}
+
+func (c *Client) SetEX(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	if strings.TrimSpace(key) == "" {
+		return nil
+	}
+	secs := int64(ttl / time.Second)
+	if secs <= 0 {
+		secs = 1
+	}
+	_, err := c.Pipeline(ctx, []string{"SET", key, string(value), "EX", strconv.FormatInt(secs, 10)})
+	return err
+}

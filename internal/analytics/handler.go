@@ -47,22 +47,12 @@ func (h *Handler) analytics(c *gin.Context) {
 		groupBy = c.Query("bucket")
 	}
 
-	top := 0
-	if topStr := c.Query("top"); topStr != "" {
-		v, err := strconv.Atoi(topStr)
-		if err != nil {
-			writeErr(c, ErrInvalidTop)
-			return
-		}
-		top = v
-	}
-
-	resp, err := h.svc.Analytics(c.Request.Context(), workspaceID, from, to, currency, groupBy, top)
+	payload, err := h.svc.AnalyticsJSON(c.Request.Context(), workspaceID, from, to, currency, groupBy, 0)
 	if err != nil {
 		writeErr(c, err)
 		return
 	}
-	c.JSON(200, resp)
+	c.Data(200, "application/json", payload)
 }
 
 func (h *Handler) summary(c *gin.Context) {
@@ -151,6 +141,8 @@ func writeErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidDateRange):
 		httpx.BadRequest(c, "invalid date range", map[string]string{"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"})
+	case errors.Is(err, ErrRangeTooLarge):
+		httpx.BadRequest(c, "date range too large", map[string]string{"max": "2 years"})
 	case errors.Is(err, ErrInvalidCurrency):
 		httpx.BadRequest(c, "invalid currency", map[string]string{"currency": "required, 3-letter code"})
 	case errors.Is(err, ErrInvalidType):

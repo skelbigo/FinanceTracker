@@ -2,15 +2,29 @@ package analytics
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/skelbigo/FinanceTracker/internal/redisx"
 )
 
 type Service struct {
-	repo Repository
+	repo       Repository
+	rdb        *redisx.Client
+	cacheIndex CacheIndex
+	cacheTTL   time.Duration
 }
 
-func NewService(repo Repository) *Service { return &Service{repo: repo} }
+func NewService(repo Repository, rdb *redisx.Client, cacheIndex CacheIndex, ttl time.Duration) *Service {
+	if cacheIndex == nil {
+		cacheIndex = NewCacheIndex(nil)
+	}
+	if ttl <= 0 {
+		ttl = 20 * time.Minute
+	}
+	return &Service{repo: repo, rdb: rdb, cacheIndex: cacheIndex, cacheTTL: ttl}
+}
 
 func (s *Service) Summary(ctx context.Context, workspaceID uuid.UUID, fromStr, toStr, currencyStr string) (SummaryResponse, error) {
 	from, toExcl, err := parseDateRange(fromStr, toStr)
@@ -149,26 +163,26 @@ func (s *Service) Timeseries(ctx context.Context, workspaceID uuid.UUID, fromStr
 	}, nil
 }
 
-func (s *Service) Analytics(
+func (s *Service) AnalyticsJSON(
 	ctx context.Context,
 	workspaceID uuid.UUID,
 	fromStr, toStr, currencyStr, groupByStr string,
 	top int,
-) (AnalyticsResponse, error) {
+) ([]byte, error) {
 	from, toExcl, err := parseDateRange(fromStr, toStr)
 	if err != nil {
-		return AnalyticsResponse{}, err
+		return nil, err
 	}
 	currency, err := parseCurrency(currencyStr)
 	if err != nil {
-		return AnalyticsResponse{}, err
+		return nil, err
 	}
 
 	bucket := BucketDay
 	if groupByStr != "" {
 		b, err := parseBucket(groupByStr)
 		if err != nil {
-			return AnalyticsResponse{}, err
+			return nil, err
 		}
 		bucket = b
 	}
@@ -177,9 +191,86 @@ func (s *Service) Analytics(
 		top = 10
 	}
 	if top < 1 || top > 100 {
-		return AnalyticsResponse{}, ErrInvalidTop
+		return nil, ErrInvalidTop
 	}
 
+	cacheKey, err := BuildAnalyticsCacheKey(workspaceID, currency, from, toExcl, bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.rdb != nil {
+		if v, found, err := s.rdb.Get(ctx, cacheKey); err == nil && found {
+			return []byte(v), nil
+		}
+	}
+
+	resp, err := s.computeAnalytics(ctx, workspaceID, from, toExcl, currency, bucket, top)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := MarshalAnalyticsResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.rdb != nil {
+		if err := s.rdb.SetEX(ctx, cacheKey, payload, s.cacheTTL); err == nil {
+			_ = s.cacheIndex.TrackKey(ctx, workspaceID, cacheKey)
+		}
+	}
+
+	return payload, nil
+}
+
+func (s *Service) Analytics(
+	ctx context.Context,
+	workspaceID uuid.UUID,
+	fromStr, toStr, currencyStr, groupByStr string,
+	top int,
+) (AnalyticsResponse, error) {
+	if s.rdb == nil {
+		from, toExcl, err := parseDateRange(fromStr, toStr)
+		if err != nil {
+			return AnalyticsResponse{}, err
+		}
+		currency, err := parseCurrency(currencyStr)
+		if err != nil {
+			return AnalyticsResponse{}, err
+		}
+		bucket := BucketDay
+		if groupByStr != "" {
+			b, err := parseBucket(groupByStr)
+			if err != nil {
+				return AnalyticsResponse{}, err
+			}
+			bucket = b
+		}
+		if top == 0 {
+			top = 10
+		}
+		if top < 1 || top > 100 {
+			return AnalyticsResponse{}, ErrInvalidTop
+		}
+		return s.computeAnalytics(ctx, workspaceID, from, toExcl, currency, bucket, top)
+	}
+
+	payload, err := s.AnalyticsJSON(ctx, workspaceID, fromStr, toStr, currencyStr, groupByStr, top)
+	if err != nil {
+		return AnalyticsResponse{}, err
+	}
+	return UnmarshalAnalyticsResponse(payload)
+}
+
+func (s *Service) computeAnalytics(
+	ctx context.Context,
+	workspaceID uuid.UUID,
+	from, toExcl time.Time,
+	currency string,
+	bucket Bucket,
+	top int,
+) (AnalyticsResponse, error) {
 	sum, err := s.repo.Summary(ctx, workspaceID, from, toExcl, currency)
 	if err != nil {
 		return AnalyticsResponse{}, err

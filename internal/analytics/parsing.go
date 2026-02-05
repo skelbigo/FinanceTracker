@@ -24,6 +24,9 @@ func parseDateRange(fromStr, toStr string) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, ErrInvalidDateRange
 	}
 
+	if to.After(from.AddDate(2, 0, 0)) {
+		return time.Time{}, time.Time{}, ErrRangeTooLarge
+	}
 	toExclusive := to.AddDate(0, 0, 1)
 	return from, toExclusive, nil
 }
