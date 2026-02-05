@@ -3,6 +3,7 @@ package transactions
 import (
 	"context"
 	"github.com/google/uuid"
+	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"log"
 	"time"
 )
@@ -14,10 +15,11 @@ type OverspendChecker interface {
 type Service struct {
 	repo    *Repo
 	budgetC OverspendChecker
+	inv     analytics.CacheIndex
 }
 
-func NewService(repo *Repo, budgetChecker OverspendChecker) *Service {
-	return &Service{repo: repo, budgetC: budgetChecker}
+func NewService(repo *Repo, budgetChecker OverspendChecker, inv analytics.CacheIndex) *Service {
+	return &Service{repo: repo, budgetC: budgetChecker, inv: inv}
 }
 
 type ListResult struct {
@@ -32,6 +34,8 @@ func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error
 	if err != nil {
 		return Transaction{}, err
 	}
+
+	s.invalidateAnalyticsBestEffort(ctx, out.WorkspaceID)
 
 	s.checkOverspendBestEffort(ctx, out)
 	return out, nil
@@ -83,12 +87,36 @@ func (s *Service) Update(ctx context.Context, t Transaction) (Transaction, error
 		return Transaction{}, err
 	}
 
+	s.invalidateAnalyticsBestEffort(ctx, out.WorkspaceID)
+
 	s.checkOverspendBestEffort(ctx, out)
 	return out, nil
 }
 
 func (s *Service) Delete(ctx context.Context, workspaceID, txID string) (bool, error) {
-	return s.repo.Delete(ctx, workspaceID, txID)
+	ok, err := s.repo.Delete(ctx, workspaceID, txID)
+	if err != nil {
+		return false, err
+	}
+	if ok {
+		s.invalidateAnalyticsBestEffort(ctx, workspaceID)
+	}
+	return ok, nil
+}
+
+func (s *Service) invalidateAnalyticsBestEffort(ctx context.Context, workspaceID string) {
+	if s.inv == nil {
+		return
+	}
+	wsID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return
+	}
+	ctxInv, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := s.inv.InvalidateWorkspace(ctxInv, wsID); err != nil {
+		log.Printf("transactions: analytics cache invalidation failed (workspace=%s): %v", wsID, err)
+	}
 }
 
 func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) {

@@ -7,6 +7,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/config"
+	"github.com/skelbigo/FinanceTracker/internal/redisx"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
@@ -48,7 +49,12 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	// transactions
 	txRepo := transactions.NewRepo(pool)
-	txSvc := transactions.NewService(txRepo, bSvc)
+
+	// redis (analytics cache)
+	rdb := redisx.NewClient(cfg)
+	aCacheIndex := analytics.NewCacheIndex(rdb)
+
+	txSvc := transactions.NewService(txRepo, bSvc, aCacheIndex)
 	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
 
 	// analytics
