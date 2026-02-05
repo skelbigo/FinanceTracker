@@ -73,7 +73,7 @@ WHERE t.workspace_id = $1
   AND t.occurred_at >= $3
   AND t.occurred_at <  $4
   AND t.type         = $5
-GROUP BY t.category_id, name
+GROUP BY 1, 2
 ORDER BY total DESC, name ASC;
 `
 
@@ -91,7 +91,7 @@ WHERE t.workspace_id = $1
   AND t.occurred_at >= $3
   AND t.occurred_at <  $4
   AND t.type         = $5
-GROUP BY t.category_id, name
+GROUP BY 1, 2
 ORDER BY total DESC, name ASC
 LIMIT $6;
 `
@@ -139,8 +139,8 @@ WHERE t.workspace_id = $1
   AND t.occurred_at >= $3
   AND t.occurred_at <  $4
   AND t.type         = $6
-GROUP BY period_start
-ORDER BY period_start ASC;
+GROUP BY 1
+ORDER BY 1 ASC;
 `
 	rows, err := r.db.Query(ctx, q, workspaceID, currency, fromInclusive, toExclusive, string(bucket), string(typ))
 	if err != nil {
@@ -173,8 +173,8 @@ WHERE t.workspace_id = $1
   AND t.currency     = $2
   AND t.occurred_at >= $3
   AND t.occurred_at <  $4
-GROUP BY period_start
-ORDER BY period_start ASC;
+GROUP BY 1
+ORDER BY 1 ASC;
 `
 	rows, err := r.db.Query(ctx, q, workspaceID, currency, fromInclusive, toExclusive, string(bucket))
 	if err != nil {
