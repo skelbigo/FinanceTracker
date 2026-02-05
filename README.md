@@ -60,6 +60,7 @@ make test
 REDIS_ENABLED=true
 REDIS_HOST=redis
 REDIS_PORT=6379
+ANALYTICS_CACHE_TTL_MINUTES=20
 ```
 2) Start compose with the cache profile:
 ```bash

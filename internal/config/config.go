@@ -25,6 +25,8 @@ const (
 	defaultRefreshTTLDays      = "30"
 	defaultCSRFTTLMinutes      = "120"
 
+	defaultAnalyticsCacheTTLMinutes = "20"
+
 	defaultBudgetsEnforceExpenseCategories = "true"
 
 	maxPort = 65535
@@ -40,6 +42,10 @@ func (c Config) RefreshTTL() time.Duration {
 
 func (c Config) CSRFTTL() time.Duration {
 	return time.Duration(c.CSRFTTLMinutes) * time.Minute
+}
+
+func (c Config) AnalyticsCacheTTL() time.Duration {
+	return time.Duration(c.AnalyticsCacheTTLMinutes) * time.Minute
 }
 
 type Config struct {
@@ -64,6 +70,8 @@ type Config struct {
 	RedisEnabled bool
 	RedisHost    string
 	RedisPort    int
+
+	AnalyticsCacheTTLMinutes int
 
 	JWTSecret           string
 	JWTAccessTTLMinutes int
@@ -151,6 +159,11 @@ func Load() (Config, error) {
 		if cfg.RedisPort <= 0 || cfg.RedisPort > maxPort {
 			errs = append(errs, fmt.Errorf("REDIS_PORT out of range: %d", cfg.RedisPort))
 		}
+	}
+
+	cfg.AnalyticsCacheTTLMinutes = mustInt(getDefault("ANALYTICS_CACHE_TTL_MINUTES", defaultAnalyticsCacheTTLMinutes), "ANALYTICS_CACHE_TTL_MINUTES", &errs)
+	if cfg.AnalyticsCacheTTLMinutes <= 0 || cfg.AnalyticsCacheTTLMinutes > 1440 {
+		errs = append(errs, fmt.Errorf("ANALYTICS_CACHE_TTL_MINUTES out of range: %d", cfg.AnalyticsCacheTTLMinutes))
 	}
 
 	cfg.JWTSecret = mustString("JWT_SECRET", &errs)

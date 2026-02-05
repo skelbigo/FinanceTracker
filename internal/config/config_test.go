@@ -22,6 +22,7 @@ func unsetConfigEnv(t *testing.T) {
 		"COOKIE_SECURE",
 		"CSRF_SECRET",
 		"CSRF_TTL_MINUTES",
+		"ANALYTICS_CACHE_TTL_MINUTES",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")
