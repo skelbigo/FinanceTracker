@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
@@ -44,6 +45,7 @@ type RouterDeps struct {
 	CategoriesSvc   *categories.Service
 	BudgetsSvc      *budgets.Service
 	TransactionsSvc *transactions.Service
+	AnalyticsSvc    *analytics.Service
 
 	Auth         RoutesRegistrar
 	Workspaces   RoutesRegistrar
@@ -89,6 +91,7 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 		Categories:   deps.CategoriesSvc,
 		Budgets:      deps.BudgetsSvc,
 		Transactions: deps.TransactionsSvc,
+		Analytics:    deps.AnalyticsSvc,
 		JWTM:         deps.JWTM,
 		CookieCfg:    deps.CookieCfg,
 		AccessTTL:    deps.AccessTTL,

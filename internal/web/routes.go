@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
@@ -19,6 +20,7 @@ type Handlers struct {
 	Categories   *categories.Service
 	Budgets      *budgets.Service
 	Transactions *transactions.Service
+	Analytics    *analytics.Service
 	JWTM         *auth.JWTManager
 
 	CookieCfg  CookieConfig
@@ -69,5 +71,6 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 	withWS.GET("/transactions/:id/edit", h.GetTransactionEdit)
 	withWS.POST("/transactions/:id/update", h.PostUpdateTransaction)
 	withWS.POST("/transactions/:id/delete", h.PostDeleteTransaction)
+	withWS.GET("/analytics", h.GetAnalyticsPage)
 	_ = withWS
 }

@@ -565,9 +565,14 @@ func optionalString(s *string) string {
 }
 
 func formatMinor(minor int64) string {
+	sign := ""
+	if minor < 0 {
+		sign = "-"
+		minor = -minor
+	}
 	whole := minor / 100
 	frac := minor % 100
-	return fmt.Sprintf("%d.%02d", whole, frac)
+	return fmt.Sprintf("%s%d.%02d", sign, whole, frac)
 }
 
 func buildPagination(offset, limit, got int, hasNext bool) txPaginationVM {

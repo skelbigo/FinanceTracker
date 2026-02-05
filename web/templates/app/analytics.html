@@ -11,19 +11,20 @@
 
         <form id="analytics-form" method="get" action="/app/analytics">
             <div class="tx-bar tx-bar--filters" role="group" aria-label="Analytics filters">
-                <select class="tx-control tx-control--select" name="period" id="analytics-period" aria-label="Period">
-                    <option value="this_month" {{ if eq .VM.Period "this_month" }}selected{{ end }}>This month</option>
-                    <option value="last_month" {{ if eq .VM.Period "last_month" }}selected{{ end }}>Last month</option>
-                    <option value="custom" {{ if eq .VM.Period "custom" }}selected{{ end }}>Custom range</option>
-                </select>
+                <input type="hidden" name="period" id="analytics-period" value="{{ .VM.Period }}">
+                <div role="group" aria-label="Period" style="display: inline-flex; gap: 8px; align-items: center;">
+                    <button class="tx-btn" type="button" data-period="this_month" id="btn-this">This month</button>
+                    <button class="tx-btn" type="button" data-period="last_month" id="btn-last">Last month</button>
+                    <button class="tx-btn" type="button" data-period="custom" id="btn-custom">Custom</button>
+                </div>
 
                 <span id="analytics-custom-range" style="display: inline-flex; gap: 10px; align-items: center;">
           <input class="tx-control" type="date" name="from" id="analytics-from" value="{{ .VM.From }}" aria-label="From">
           <input class="tx-control" type="date" name="to" id="analytics-to" value="{{ .VM.To }}" aria-label="To">
         </span>
 
-                <select class="tx-control tx-control--select" name="g" id="analytics-g" aria-label="Granularity">
-                    <option value="" {{ if eq .VM.GranularityInput "auto" }}selected{{ end }}>Auto</option>
+                <select class="tx-control tx-control--select" name="groupBy" id="analytics-g" aria-label="Group by">
+                    <option value="auto" {{ if eq .VM.GranularityInput "auto" }}selected{{ end }}>Auto</option>
                     <option value="day" {{ if eq .VM.GranularityInput "day" }}selected{{ end }}>Day</option>
                     <option value="week" {{ if eq .VM.GranularityInput "week" }}selected{{ end }}>Week</option>
                     <option value="month" {{ if eq .VM.GranularityInput "month" }}selected{{ end }}>Month</option>
@@ -31,32 +32,30 @@
 
                 <input class="tx-control tx-control--xs" name="cur" value="{{ .VM.Currency }}" maxlength="3" aria-label="Currency">
 
-                <button class="tx-btn tx-btn--primary" type="submit">Apply</button>
+                <noscript>
+                    <button class="tx-btn tx-btn--primary" type="submit">Apply</button>
+                </noscript>
             </div>
         </form>
     </div>
 
     <div class="tx-block">
         <div class="tx-block-title">Totals</div>
-        <div class="tx-bar" role="group" aria-label="Totals" style="justify-content: space-between; align-items: stretch; gap: 18px;">
-            <div style="min-width: 180px;">
-                <div class="ws-label">Total income</div>
-                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
-                    {{ .VM.Income }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+        <div class="tx-bar" role="group" aria-label="Totals">
+            <div class="tx-metrics" aria-label="Totals widgets">
+                <div class="tx-metric" data-kind="income">
+                    <div class="tx-metric-label">Total income</div>
+                    <div class="tx-metric-value">{{ .VM.Income }} <span class="tx-metric-cur">{{ .VM.Currency }}</span></div>
                 </div>
-            </div>
 
-            <div style="min-width: 180px;">
-                <div class="ws-label">Total expense</div>
-                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
-                    {{ .VM.Expense }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+                <div class="tx-metric" data-kind="expense">
+                    <div class="tx-metric-label">Total expense</div>
+                    <div class="tx-metric-value">{{ .VM.Expense }} <span class="tx-metric-cur">{{ .VM.Currency }}</span></div>
                 </div>
-            </div>
 
-            <div style="min-width: 180px;">
-                <div class="ws-label">Net (income − expense)</div>
-                <div style="font-size: 26px; font-weight: 850; letter-spacing: -0.2px;">
-                    {{ .VM.Net }} <span style="font-size: 12px; opacity: 0.7;">{{ .VM.Currency }}</span>
+                <div class="tx-metric" data-kind="net">
+                    <div class="tx-metric-label">Net (income − expense)</div>
+                    <div class="tx-metric-value">{{ .VM.Net }} <span class="tx-metric-cur">{{ .VM.Currency }}</span></div>
                 </div>
             </div>
         </div>
@@ -74,30 +73,22 @@
 
     <div class="tx-block">
         <div class="tx-block-title">Top categories (expense)</div>
-        <div class="tx-table-wrap" role="region" aria-label="Top categories" tabindex="0">
-            <table class="tx-table">
-                <thead>
-                <tr>
-                    <th scope="col">Category</th>
-                    <th scope="col" class="tx-th-amount">Spent</th>
-                    <th scope="col" class="tx-th-amount">Share</th>
-                </tr>
-                </thead>
-                <tbody>
-                {{ range .VM.Top }}
-                <tr>
-                    <td>{{ .Name }}</td>
-                    <td class="tx-th-amount">{{ .Spent }}</td>
-                    <td class="tx-th-amount">{{ .Percent }}</td>
-                </tr>
-                {{ else }}
-                <tr>
-                    <td colspan="3">No expense categories in this period.</td>
-                </tr>
-                {{ end }}
-                </tbody>
-            </table>
+        <div class="tx-cats" role="list" aria-label="Top expense categories">
+            {{ range .VM.Top }}
+            <div class="tx-cat" role="listitem">
+                <div class="tx-cat-row">
+                    <div class="tx-cat-name">{{ .Name }}</div>
+                    <div class="tx-cat-amt">{{ .Spent }} <span class="tx-currency">{{ $.VM.Currency }}</span></div>
+                    <div class="tx-cat-share">{{ .Percent }}</div>
+                </div>
+                <div class="tx-cat-bar" aria-hidden="true">
+                    <div class="tx-cat-bar-fill" style="width: {{ printf "%.2f" .SharePct }}%"></div>
+            </div>
         </div>
+        {{ else }}
+        <div class="tx-cat-empty">No expense categories in this period.</div>
+        {{ end }}
+    </div>
     </div>
 
     {{/* Chart.js via CDN. If you want a local file, put it into web/static/chart.min.js and replace this src. */}}
@@ -105,21 +96,57 @@
 
     <script>
         (function () {
+            var form = document.getElementById('analytics-form');
             var period = document.getElementById('analytics-period');
             var customWrap = document.getElementById('analytics-custom-range');
             var from = document.getElementById('analytics-from');
             var to = document.getElementById('analytics-to');
+            var g = document.getElementById('analytics-g');
+            var cur = document.querySelector('input[name="cur"]');
+
+            function setActivePeriodButtons() {
+                var v = (period && period.value) || 'this_month';
+                var ids = ['btn-this','btn-last','btn-custom'];
+                ids.forEach(function (id) {
+                    var b = document.getElementById(id);
+                    if (!b) return;
+                    var isOn = b.getAttribute('data-period') === v;
+                    b.style.opacity = isOn ? '1' : '0.65';
+                    b.style.border = isOn ? '1px solid rgba(255,255,255,0.35)' : '1px solid rgba(255,255,255,0.18)';
+                });
+            }
 
             function syncCustom() {
                 var isCustom = period && period.value === 'custom';
                 if (customWrap) customWrap.style.display = isCustom ? 'inline-flex' : 'none';
                 if (from) from.disabled = !isCustom;
                 if (to) to.disabled = !isCustom;
+                setActivePeriodButtons();
             }
-            if (period) {
-                period.addEventListener('change', syncCustom);
-                syncCustom();
+
+            function submitSoon() {
+                if (!form) return;
+                clearTimeout(submitSoon._t);
+                submitSoon._t = setTimeout(function () { form.submit(); }, 150);
             }
+
+            ['btn-this','btn-last','btn-custom'].forEach(function (id) {
+                var b = document.getElementById(id);
+                if (!b) return;
+                b.addEventListener('click', function () {
+                    if (!period) return;
+                    period.value = b.getAttribute('data-period');
+                    syncCustom();
+                    submitSoon();
+                });
+            });
+
+            if (g) g.addEventListener('change', submitSoon);
+            if (cur) cur.addEventListener('change', submitSoon);
+            if (from) from.addEventListener('change', submitSoon);
+            if (to) to.addEventListener('change', submitSoon);
+
+            syncCustom();
 
             function renderChart() {
                 if (typeof Chart === 'undefined') {
@@ -141,14 +168,19 @@
 
                 var ctx = canvas.getContext('2d');
                 new Chart(ctx, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
-                        labels: payload.labels || [],
-                        datasets: [
-                            { label: 'Income', data: payload.income || [], tension: 0.25, borderWidth: 2, pointRadius: 0 },
-                            { label: 'Expense', data: payload.expense || [], tension: 0.25, borderWidth: 2, pointRadius: 0 },
-                            { label: 'Net', data: payload.net || [], tension: 0.25, borderWidth: 2, pointRadius: 0 }
-                        ]
+                        labels: (payload.labels || []),
+                        datasets: (function () {
+                            var income = payload.income || [];
+                            var expense = (payload.expense || []).map(function (v) { return -v; });
+                            var net = payload.net || [];
+                            return [
+                                { type: 'bar', label: 'Income', data: income, stack: 'cash', borderWidth: 0, borderRadius: 3, backgroundColor: 'rgba(34, 197, 94, 0.35)' },
+                                { type: 'bar', label: 'Expense', data: expense, stack: 'cash', borderWidth: 0, borderRadius: 3, backgroundColor: 'rgba(239, 68, 68, 0.35)' },
+                                { type: 'line', label: 'Net', data: net, tension: 0.25, borderWidth: 2, pointRadius: 0, borderColor: 'rgba(59, 130, 246, 0.9)' }
+                            ];
+                        })()
                     },
                     options: {
                         responsive: true,
@@ -156,14 +188,44 @@
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: true },
-                            tooltip: { mode: 'index', intersect: false }
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function (ctx) {
+                                        var label = (ctx.dataset && ctx.dataset.label) ? ctx.dataset.label : '';
+                                        var v = (ctx.parsed && typeof ctx.parsed.y === 'number') ? ctx.parsed.y : 0;
+
+                                        function fmtValue(val) {
+                                            var n = (typeof val === 'number') ? val : parseFloat(val);
+                                            if (!isFinite(n)) n = 0;
+                                            var s = n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                            var cur = payload.currency || '';
+                                            return cur ? (s + ' ' + cur) : s;
+                                        }
+
+                                        if (label === 'Expense') {
+                                            return label + ': -' + fmtValue(Math.abs(v));
+                                        }
+                                        return label + ': ' + fmtValue(v);
+                                    }
+                                }
+                            }
                         },
                         scales: {
+                            x: {
+                                stacked: true,
+                                ticks: { autoSkip: true, maxRotation: 0 }
+                            },
                             y: {
+                                stacked: true,
                                 ticks: {
                                     callback: function (v) {
+                                        var n = (typeof v === 'number') ? v : parseFloat(v);
+                                        if (!isFinite(n)) n = 0;
+                                        var s = n.toLocaleString(undefined, { maximumFractionDigits: 2 });
                                         var cur = payload.currency || '';
-                                        return cur ? (v + ' ' + cur) : v;
+                                        return cur ? (s + ' ' + cur) : s;
                                     }
                                 }
                             }

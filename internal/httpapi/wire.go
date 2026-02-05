@@ -73,6 +73,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		CategoriesSvc:   catSvc,
 		BudgetsSvc:      bSvc,
 		TransactionsSvc: txSvc,
+		AnalyticsSvc:    aSvc,
 
 		Auth:         authH,
 		Workspaces:   wsH,
