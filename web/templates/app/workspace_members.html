@@ -31,25 +31,42 @@
                     </div>
 
                     <div class="wm-cell" role="cell">
+                        {{ $isOwner := eq .Role "owner" }}
+                        {{ $isLastOwner := and $isOwner (eq $.OwnersCount 1) }}
+                        {{ $isSelf := eq .UserID $.CurrentUserID }}
+
                         {{ if eq $.MyRole "owner" }}
+
+                        {{/* MVP rule: owner cannot change own role; also last owner cannot be demoted */}}
+                        {{ if and $isOwner $isSelf }}
+                        <span class="wm-role-pill" title="Owner role cannot be changed in MVP">owner (you)</span>
+                        {{ else }}
                         <form class="wm-role-form" action="/app/workspaces/{{ $.Workspace.ID }}/members/{{ .UserID }}/role" method="post">
                             <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
-                            <select class="wm-role-select" name="role" onchange="this.form.submit()">
+                            <select class="wm-role-select" name="role" onchange="this.form.submit()" {{ if $isLastOwner }}disabled{{ end }}>
                                 <option value="owner" {{ if eq .Role "owner" }}selected{{ end }}>owner</option>
                                 <option value="member" {{ if eq .Role "member" }}selected{{ end }}>member</option>
                                 <option value="viewer" {{ if eq .Role "viewer" }}selected{{ end }}>viewer</option>
                             </select>
+                            {{ if $isLastOwner }}
+                            <div class="wm-hint">Last owner can’t be demoted</div>
+                            {{ end }}
                         </form>
+                        {{ end }}
+
                         {{ else }}
                         <span class="wm-role-pill">{{ .Role }}</span>
                         {{ end }}
                     </div>
 
                     <div class="wm-cell wm-cell-actions" role="cell">
+                        {{ $isOwner := eq .Role "owner" }}
+                        {{ $isLastOwner := and $isOwner (eq $.OwnersCount 1) }}
+
                         {{ if eq $.MyRole "owner" }}
                         <form class="wm-remove-form" action="/app/workspaces/{{ $.Workspace.ID }}/members/{{ .UserID }}/remove" method="post">
                             <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
-                            <button class="wm-remove-btn" type="submit">Remove</button>
+                            <button class="wm-remove-btn" type="submit" {{ if $isLastOwner }}disabled title="You can't remove the last owner"{{ end }}>Remove</button>
                         </form>
                         {{ else }}
                         <span class="wm-dash">—</span>

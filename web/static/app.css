@@ -534,6 +534,17 @@ body.app-dark .app-logout-btn:active {
     cursor: pointer;
 }
 
+.wm-role-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.wm-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.58);
+}
+
 .wm-role-pill {
     display: inline-flex;
     align-items: center;
@@ -567,8 +578,17 @@ body.app-dark .app-logout-btn:active {
     cursor: pointer;
 }
 
+.wm-remove-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .wm-remove-btn:hover {
     background: rgba(255, 80, 80, 0.16);
+}
+
+.wm-remove-btn:disabled:hover {
+    background: rgba(255, 80, 80, 0.10);
 }
 
 .wm-add-form {

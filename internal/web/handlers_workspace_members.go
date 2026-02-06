@@ -43,6 +43,13 @@ func (h *Handlers) GetWorkspaceMembersPage(c *gin.Context) {
 		return
 	}
 
+	ownersCount := 0
+	for _, m := range members {
+		if m.Role == workspaces.RoleOwner {
+			ownersCount++
+		}
+	}
+
 	headerItems, _ := h.Workspaces.ListMyWorkspaces(c.Request.Context(), userID)
 	current, _ := c.Cookie(CurrentWorkspaceCookie)
 
@@ -54,6 +61,8 @@ func (h *Handlers) GetWorkspaceMembersPage(c *gin.Context) {
 		"Workspace":        w,
 		"MyRole":           string(myRole),
 		"Members":          members,
+		"OwnersCount":      ownersCount,
+		"CurrentUserID":    userID,
 		"HeaderWorkspaces": headerItems,
 		"CurrentID":        current,
 		"ReturnTo":         c.Request.URL.Path,
