@@ -55,6 +55,12 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 	app.GET("/workspaces", h.GetWorkspacesPage)
 	app.POST("/workspaces", h.PostCreateWorkspace)
 
+	app.POST("/workspaces/select", h.PostSelectWorkspace)
+	app.GET("/workspaces/:id", h.GetWorkspaceMembersPage)
+	app.POST("/workspaces/:id/members", h.PostAddWorkspaceMember)
+	app.POST("/workspaces/:id/members/:userId/role", h.PostUpdateWorkspaceMemberRole)
+	app.POST("/workspaces/:id/members/:userId/remove", h.PostRemoveWorkspaceMember)
+
 	withWS := app.Group("")
 	withWS.Use(h.RequireWorkspace())
 	withWS.GET("/categories", h.GetCategoriesPage)

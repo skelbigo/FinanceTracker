@@ -40,12 +40,20 @@
             <div class="ws-item-name">{{ .Name }}</div>
             <div class="ws-item-meta">{{ .Role }}</div>
           </div>
-          <div class="ws-item-status">
+
+          <div class="ws-item-actions">
             {{ if eq $.CurrentID .ID }}
             <span class="ws-pill">Current</span>
             {{ else }}
-            <span class="ws-dash">—</span>
+            <form class="ws-action-form" action="/app/workspaces/select" method="post">
+              <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+              <input type="hidden" name="workspace_id" value="{{ .ID }}">
+              <input type="hidden" name="return_to" value="/app/workspaces">
+              <button class="ws-action-btn" type="submit">Use</button>
+            </form>
             {{ end }}
+
+            <a class="ws-action-link" href="/app/workspaces/{{ .ID }}" title="Manage members">Manage</a>
           </div>
         </div>
         {{ end }}

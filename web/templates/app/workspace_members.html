@@ -1,0 +1,90 @@
+{{ define "content" }}
+<section class="wm-wrap" aria-label="Workspace members">
+    <div class="wm-header">
+        <a class="wm-back" href="/app/workspaces">← Back</a>
+        {{ with .Workspace }}
+        <div class="wm-headline">
+            <h1 class="wm-title">{{ .Name }}</h1>
+            <div class="wm-meta">Your role: <span class="wm-role">{{ $.MyRole }}</span></div>
+        </div>
+        {{ end }}
+    </div>
+
+    <div class="wm-card">
+        <div class="wm-section">
+            <h2 class="wm-section-title">Members</h2>
+
+            <div class="wm-table" role="table" aria-label="Workspace members">
+                <div class="wm-row wm-row-head" role="row">
+                    <div class="wm-cell" role="columnheader">User</div>
+                    <div class="wm-cell" role="columnheader">Role</div>
+                    <div class="wm-cell wm-cell-actions" role="columnheader">Actions</div>
+                </div>
+
+                {{ range .Members }}
+                <div class="wm-row" role="row">
+                    <div class="wm-cell" role="cell">
+                        <div class="wm-user">
+                            <div class="wm-user-primary">{{ if .Name }}{{ .Name }}{{ else }}{{ .Email }}{{ end }}</div>
+                            <div class="wm-user-secondary">{{ .Email }}</div>
+                        </div>
+                    </div>
+
+                    <div class="wm-cell" role="cell">
+                        {{ if eq $.MyRole "owner" }}
+                        <form class="wm-role-form" action="/app/workspaces/{{ $.Workspace.ID }}/members/{{ .UserID }}/role" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+                            <select class="wm-role-select" name="role" onchange="this.form.submit()">
+                                <option value="owner" {{ if eq .Role "owner" }}selected{{ end }}>owner</option>
+                                <option value="member" {{ if eq .Role "member" }}selected{{ end }}>member</option>
+                                <option value="viewer" {{ if eq .Role "viewer" }}selected{{ end }}>viewer</option>
+                            </select>
+                        </form>
+                        {{ else }}
+                        <span class="wm-role-pill">{{ .Role }}</span>
+                        {{ end }}
+                    </div>
+
+                    <div class="wm-cell wm-cell-actions" role="cell">
+                        {{ if eq $.MyRole "owner" }}
+                        <form class="wm-remove-form" action="/app/workspaces/{{ $.Workspace.ID }}/members/{{ .UserID }}/remove" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+                            <button class="wm-remove-btn" type="submit">Remove</button>
+                        </form>
+                        {{ else }}
+                        <span class="wm-dash">—</span>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+
+        {{ if eq .MyRole "owner" }}
+        <div class="wm-divider" role="separator" aria-hidden="true"></div>
+        <div class="wm-section">
+            <h2 class="wm-section-title">Add member</h2>
+            <form class="wm-add-form" action="/app/workspaces/{{ .Workspace.ID }}/members" method="post">
+                <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+
+                <label class="wm-field">
+                    <span class="wm-label">Email</span>
+                    <input class="wm-input" name="email" required placeholder="user@example.com" autocomplete="off" />
+                </label>
+
+                <label class="wm-field wm-field-small">
+                    <span class="wm-label">Role</span>
+                    <select class="wm-role-select" name="role">
+                        <option value="member" selected>member</option>
+                        <option value="viewer">viewer</option>
+                        <option value="owner">owner</option>
+                    </select>
+                </label>
+
+                <button class="wm-btn" type="submit">Add</button>
+            </form>
+        </div>
+        {{ end }}
+    </div>
+</section>
+{{ end }}

@@ -393,6 +393,261 @@ body.app-dark .app-logout-btn:active {
     margin: 0;
 }
 
+/* Workspace members */
+.wm-wrap {
+    position: relative;
+    z-index: 1;
+    width: min(980px, 92vw);
+    margin: 0 auto;
+    padding: 96px 0 84px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.wm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.wm-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    font-weight: 750;
+    font-size: 12px;
+}
+
+.wm-back:hover {
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.wm-title {
+    margin: 0;
+    font-size: clamp(34px, 4.4vw, 48px);
+    font-weight: 320;
+    letter-spacing: -0.5px;
+}
+
+.wm-meta {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.70);
+    font-size: 14px;
+}
+
+.wm-role {
+    color: rgba(32, 242, 200, 0.95);
+    font-weight: 850;
+    text-transform: capitalize;
+}
+
+.wm-card {
+    width: 100%;
+    border-radius: 18px;
+    border: 1px solid rgba(32, 242, 200, 0.28);
+    background: rgba(8, 10, 14, 0.52);
+    box-shadow:
+            0 34px 70px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(32, 242, 200, 0.12),
+            0 0 46px rgba(32, 242, 200, 0.16);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.wm-section {
+    padding: 22px 26px;
+}
+
+.wm-section-title {
+    margin: 0 0 18px;
+    font-size: 18px;
+    font-weight: 850;
+    letter-spacing: -0.2px;
+}
+
+.wm-divider {
+    height: 1px;
+    background: rgba(32, 242, 200, 0.26);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.wm-table {
+    display: grid;
+    gap: 10px;
+}
+
+.wm-row {
+    display: grid;
+    grid-template-columns: 1.4fr 0.6fr 0.6fr;
+    gap: 12px;
+    padding: 12px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(0, 0, 0, 0.18);
+    align-items: center;
+}
+
+.wm-row-head {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(255, 255, 255, 0.70);
+}
+
+.wm-user-primary {
+    font-weight: 850;
+    letter-spacing: -0.15px;
+}
+
+.wm-user-secondary {
+    margin-top: 2px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.wm-role-form,
+.wm-remove-form {
+    margin: 0;
+}
+
+.wm-role-select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.92);
+    font-weight: 750;
+    text-transform: capitalize;
+    cursor: pointer;
+}
+
+.wm-role-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.88);
+    font-weight: 750;
+    text-transform: capitalize;
+    font-size: 12px;
+}
+
+.wm-cell-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.wm-remove-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 80, 80, 0.10);
+    color: rgba(255, 255, 255, 0.92);
+    font-weight: 750;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.wm-remove-btn:hover {
+    background: rgba(255, 80, 80, 0.16);
+}
+
+.wm-add-form {
+    display: grid;
+    grid-template-columns: 1fr 180px;
+    gap: 18px 22px;
+    align-items: end;
+}
+
+.wm-field {
+    display: grid;
+    gap: 8px;
+}
+
+.wm-label {
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.wm-input {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 10px 2px 8px;
+    color: rgba(255, 255, 255, 0.92);
+    outline: none;
+}
+
+.wm-input:focus {
+    border-bottom-color: rgba(32, 242, 200, 0.72);
+    box-shadow: 0 14px 34px rgba(32, 242, 200, 0.10);
+}
+
+.wm-btn {
+    grid-column: 1 / -1;
+    justify-self: center;
+    padding: 12px 26px;
+    border-radius: 999px;
+    border: 0;
+    font-weight: 850;
+    color: #05201b;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    box-shadow: 0 16px 30px rgba(32, 242, 200, 0.22);
+    transition: transform 120ms ease, filter 120ms ease;
+}
+
+.wm-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.02);
+}
+
+.wm-btn:active {
+    transform: translateY(1px);
+}
+
+.wm-dash {
+    color: rgba(255, 255, 255, 0.42);
+}
+
+@media (max-width: 620px) {
+    .wm-wrap {
+        padding: 72px 0 70px;
+    }
+
+    .wm-row {
+        grid-template-columns: 1fr;
+    }
+
+    .wm-cell-actions {
+        justify-content: flex-start;
+    }
+
+    .wm-add-form {
+        grid-template-columns: 1fr;
+    }
+}
+
 .ws-wrap {
     position: relative;
     z-index: 1;
@@ -562,6 +817,64 @@ body.app-dark .app-logout-btn:active {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.10);
     background: rgba(0, 0, 0, 0.18);
+}
+
+
+.ws-item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.ws-action-form {
+    margin: 0;
+}
+
+.ws-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.90);
+    font-weight: 750;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ws-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.ws-action-btn:active {
+    transform: translateY(1px);
+}
+
+.ws-action-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.82);
+    font-weight: 750;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.ws-action-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+@media (max-width: 460px) {
+    .ws-item-actions {
+        flex-wrap: wrap;
+    }
 }
 
 .ws-item-name {

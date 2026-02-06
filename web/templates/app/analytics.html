@@ -161,6 +161,12 @@
                 var payload;
                 try {
                     payload = JSON.parse(rawEl.textContent || '{}');
+                    if (typeof payload === 'string') {
+                        try { payload = JSON.parse(payload); } catch (e2) {
+                            console.error('bad chart payload (double-parse)', e2);
+                            return;
+                        }
+                    }
                 } catch (e) {
                     console.error('bad chart payload', e);
                     return;
