@@ -32,6 +32,10 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer),
 		h.getBudget,
 	)
+	wsg.POST("/budgets",
+		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
+		h.createBudget,
+	)
 	wsg.PUT("/budgets",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
 		h.upsertBudget,
@@ -40,10 +44,35 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
 		h.updateBudget,
 	)
+	wsg.PATCH("/budgets/:budgetId",
+		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
+		h.updateBudget,
+	)
 	wsg.DELETE("/budgets/:budgetId",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember),
 		h.deleteBudget,
 	)
+}
+
+func (h *Handler) createBudget(c *gin.Context) {
+	workspaceID, ok := parseWorkspaceUUID(c)
+	if !ok {
+		return
+	}
+
+	var req UpsertBudgetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpx.BadRequest(c, "invalid request body", map[string]string{"body": "must be valid json"})
+		return
+	}
+
+	res, err := h.svc.CreateBudget(c.Request.Context(), workspaceID, req)
+	if err != nil {
+		respondErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, res)
 }
 
 func (h *Handler) upsertBudget(c *gin.Context) {

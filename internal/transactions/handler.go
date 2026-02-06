@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	wsg.GET("/transactions", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer), h.list)
 	wsg.GET("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer), h.getByID)
 	wsg.PUT("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.update)
+	wsg.PATCH("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.update)
 	wsg.DELETE("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.delete)
 }
 
@@ -46,6 +47,7 @@ type createTxReq struct {
 	Tags        []string `json:"tags"`
 }
 
+// updateTxReq matches createTxReq; we keep it separate for clarity.
 type updateTxReq struct {
 	Type        string   `json:"type" binding:"required"`
 	AmountMinor int64    `json:"amount_minor" binding:"required"`
@@ -60,11 +62,6 @@ func UserIDFromCtx(c *gin.Context) (string, bool) {
 	v, ok := c.Get(auth.CtxUserIDKey)
 	id, ok2 := v.(string)
 	return id, ok && ok2 && id != ""
-}
-
-func validateUUIDParam(value string) bool {
-	_, err := uuid.Parse(value)
-	return err == nil
 }
 
 func (h *Handler) create(c *gin.Context) {
@@ -251,16 +248,20 @@ func (h *Handler) getByID(c *gin.Context) {
 		return
 	}
 
-	txID := c.Param("txId")
-	if !validateUUIDParam(txID) {
-		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+	txID := strings.TrimSpace(c.Param("txId"))
+	if txID == "" {
+		httpx.BadRequest(c, "missing txId", nil)
+		return
+	}
+	if _, err := uuid.Parse(txID); err != nil {
+		httpx.BadRequest(c, "invalid txId", map[string]string{"txId": "must be uuid"})
 		return
 	}
 
 	out, err := h.svc.GetByID(c.Request.Context(), workspaceID, txID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+			httpx.NotFound(c, "transaction not found")
 			return
 		}
 		httpx.Internal(c)
@@ -284,9 +285,13 @@ func (h *Handler) update(c *gin.Context) {
 		return
 	}
 
-	txID := c.Param("txId")
-	if !validateUUIDParam(txID) {
-		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+	txID := strings.TrimSpace(c.Param("txId"))
+	if txID == "" {
+		httpx.BadRequest(c, "missing txId", nil)
+		return
+	}
+	if _, err := uuid.Parse(txID); err != nil {
+		httpx.BadRequest(c, "invalid txId", map[string]string{"txId": "must be uuid"})
 		return
 	}
 
@@ -309,7 +314,9 @@ func (h *Handler) update(c *gin.Context) {
 
 	cur, err := NormalizeCurrencyStrict(req.Currency)
 	if err != nil {
-		httpx.Unprocessable(c, "invalid currency", map[string]string{"currency": "ISO 4217 like UAH, USD (uppercase)"})
+		httpx.Unprocessable(c, "invalid currency", map[string]string{
+			"currency": "ISO 4217 like UAH, USD (uppercase)",
+		})
 		return
 	}
 
@@ -349,7 +356,7 @@ func (h *Handler) update(c *gin.Context) {
 	out, err := h.svc.Update(c.Request.Context(), tx)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+			httpx.NotFound(c, "transaction not found")
 			return
 		}
 		httpx.Internal(c)
@@ -367,9 +374,13 @@ func (h *Handler) delete(c *gin.Context) {
 		return
 	}
 
-	txID := c.Param("txId")
-	if !validateUUIDParam(txID) {
-		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+	txID := strings.TrimSpace(c.Param("txId"))
+	if txID == "" {
+		httpx.BadRequest(c, "missing txId", nil)
+		return
+	}
+	if _, err := uuid.Parse(txID); err != nil {
+		httpx.BadRequest(c, "invalid txId", map[string]string{"txId": "must be uuid"})
 		return
 	}
 
@@ -380,7 +391,7 @@ func (h *Handler) delete(c *gin.Context) {
 		return
 	}
 	if !okDel {
-		httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+		httpx.NotFound(c, "transaction not found")
 		return
 	}
 

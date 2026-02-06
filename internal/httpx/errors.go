@@ -25,6 +25,10 @@ func Unauthorized(c *gin.Context, message string) {
 	Error(c, http.StatusUnauthorized, message, nil)
 }
 
+func NotFound(c *gin.Context, message string) {
+	Error(c, http.StatusNotFound, message, nil)
+}
+
 func Conflict(c *gin.Context, message string) {
 	Error(c, http.StatusConflict, message, nil)
 }

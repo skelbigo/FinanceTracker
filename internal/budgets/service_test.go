@@ -22,6 +22,20 @@ func (r *fakeRepo) Upsert(ctx context.Context, workspaceID uuid.UUID, req Upsert
 	return Budget{}, nil
 }
 
+func (r *fakeRepo) InsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
+	b := Budget{
+		ID:               uuid.New(),
+		WorkspaceID:      workspaceID,
+		CategoryID:       req.CategoryID,
+		Period:           req.Period,
+		AmountLimitMinor: req.AmountLimitMinor,
+		Currency:         req.Currency,
+		CreatedAt:        time.Now(),
+	}
+	r.budgets = append(r.budgets, b)
+	return b, nil
+}
+
 func (r *fakeRepo) UpdateBudget(ctx context.Context, workspaceID, budgetID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
 	return Budget{}, nil
 }

@@ -11,6 +11,7 @@ import (
 )
 
 type BudgetRepo interface {
+	InsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error)
 	Upsert(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error)
 	UpdateBudget(ctx context.Context, workspaceID, budgetID uuid.UUID, req UpsertBudgetRequest) (Budget, error)
 	DeleteBudget(ctx context.Context, workspaceID, budgetID uuid.UUID) error
@@ -48,6 +49,14 @@ func (s *Service) UpsertBudget(ctx context.Context, workspaceID uuid.UUID, req U
 		return Budget{}, err
 	}
 	return s.repo.Upsert(ctx, workspaceID, norm)
+}
+
+func (s *Service) CreateBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
+	norm, err := s.validateUpsertInput(ctx, workspaceID, req)
+	if err != nil {
+		return Budget{}, err
+	}
+	return s.repo.InsertBudget(ctx, workspaceID, norm)
 }
 
 func (s *Service) Update(ctx context.Context, workspaceID, budgetID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {

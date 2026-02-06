@@ -44,6 +44,28 @@ RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, c
 	return b, nil
 }
 
+func (r *Repo) InsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
+	const q = `
+INSERT INTO budgets (workspace_id, category_id, period, amount_limit_minor, currency)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at;
+`
+	var b Budget
+	err := r.db.QueryRow(ctx, q, workspaceID, req.CategoryID, req.Period, req.AmountLimitMinor, req.Currency).
+		Scan(&b.ID, &b.WorkspaceID, &b.CategoryID, &b.Period, &b.AmountLimitMinor, &b.Currency, &b.CreatedAt, &b.UpdatedAt)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return Budget{}, ErrBudgetExists
+			}
+		}
+		return Budget{}, err
+	}
+	return b, nil
+}
+
 func (r *Repo) UpdateBudget(ctx context.Context, workspaceID, budgetID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
 	const q = `
 UPDATE budgets
