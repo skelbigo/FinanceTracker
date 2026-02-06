@@ -1,7 +1,10 @@
 package transactions
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
@@ -28,9 +31,22 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	wsg := g.Group("/:id")
 	wsg.POST("/transactions", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.create)
 	wsg.GET("/transactions", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer), h.list)
+	wsg.GET("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer), h.getByID)
+	wsg.PUT("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.update)
+	wsg.DELETE("/transactions/:txId", workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleMember), h.delete)
 }
 
 type createTxReq struct {
+	Type        string   `json:"type" binding:"required"`
+	AmountMinor int64    `json:"amount_minor" binding:"required"`
+	Currency    string   `json:"currency" binding:"required"`
+	OccurredAt  string   `json:"occurred_at" binding:"required"`
+	Note        *string  `json:"note"`
+	CategoryID  *string  `json:"category_id"`
+	Tags        []string `json:"tags"`
+}
+
+type updateTxReq struct {
 	Type        string   `json:"type" binding:"required"`
 	AmountMinor int64    `json:"amount_minor" binding:"required"`
 	Currency    string   `json:"currency" binding:"required"`
@@ -44,6 +60,11 @@ func UserIDFromCtx(c *gin.Context) (string, bool) {
 	v, ok := c.Get(auth.CtxUserIDKey)
 	id, ok2 := v.(string)
 	return id, ok && ok2 && id != ""
+}
+
+func validateUUIDParam(value string) bool {
+	_, err := uuid.Parse(value)
+	return err == nil
 }
 
 func (h *Handler) create(c *gin.Context) {
@@ -221,4 +242,147 @@ func (h *Handler) list(c *gin.Context) {
 		"limit":    res.Limit,
 		"offset":   res.Offset,
 	})
+}
+
+func (h *Handler) getByID(c *gin.Context) {
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
+
+	txID := c.Param("txId")
+	if !validateUUIDParam(txID) {
+		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+		return
+	}
+
+	out, err := h.svc.GetByID(c.Request.Context(), workspaceID, txID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+			return
+		}
+		httpx.Internal(c)
+		log.Printf("transactions.getByID: %v", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"transaction": out})
+}
+
+func (h *Handler) update(c *gin.Context) {
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
+
+	userID, ok := UserIDFromCtx(c)
+	if !ok {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	txID := c.Param("txId")
+	if !validateUUIDParam(txID) {
+		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+		return
+	}
+
+	var req updateTxReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpx.BadRequest(c, "invalid json", nil)
+		return
+	}
+
+	typ := NormalizeType(req.Type)
+	if !ValidateType(typ) {
+		httpx.Unprocessable(c, "invalid transactions type", map[string]string{"type": "income|expense"})
+		return
+	}
+
+	if req.AmountMinor <= 0 {
+		httpx.Unprocessable(c, "invalid amount", map[string]string{"amount_minor": "must be > 0"})
+		return
+	}
+
+	cur, err := NormalizeCurrencyStrict(req.Currency)
+	if err != nil {
+		httpx.Unprocessable(c, "invalid currency", map[string]string{"currency": "ISO 4217 like UAH, USD (uppercase)"})
+		return
+	}
+
+	occ, err := ParseOccurredAt(req.OccurredAt)
+	if err != nil {
+		httpx.Unprocessable(c, "invalid occurred at", map[string]string{"occurred_at": "YYYY-MM-DD or RFC3339"})
+		return
+	}
+
+	catID, err := NormalizeOptionalUUID(req.CategoryID)
+	if err != nil {
+		httpx.Unprocessable(c, "invalid category_id", map[string]string{"category_id": "must be uuid"})
+		return
+	}
+
+	note := NormalizeOptionalNote(req.Note)
+
+	tags, err := NormalizeTagsSlice(req.Tags)
+	if err != nil {
+		httpx.Unprocessable(c, "invalid tags", map[string]string{"tags": err.Error()})
+		return
+	}
+
+	tx := Transaction{
+		ID:          txID,
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		CategoryID:  catID,
+		Type:        typ,
+		AmountMinor: req.AmountMinor,
+		Currency:    cur,
+		OccurredAt:  occ,
+		Note:        note,
+		Tags:        tags,
+	}
+
+	out, err := h.svc.Update(c.Request.Context(), tx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+			return
+		}
+		httpx.Internal(c)
+		log.Printf("transactions.update: %v", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"transaction": out})
+}
+
+func (h *Handler) delete(c *gin.Context) {
+	workspaceID, ok := workspaces.GetWorkspaceID(c)
+	if !ok {
+		httpx.Internal(c)
+		return
+	}
+
+	txID := c.Param("txId")
+	if !validateUUIDParam(txID) {
+		httpx.Unprocessable(c, "invalid txId", map[string]string{"txId": "must be uuid"})
+		return
+	}
+
+	okDel, err := h.svc.Delete(c.Request.Context(), workspaceID, txID)
+	if err != nil {
+		httpx.Internal(c)
+		log.Printf("transactions.delete: %v", err)
+		return
+	}
+	if !okDel {
+		httpx.Error(c, http.StatusNotFound, "transaction not found", nil)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
