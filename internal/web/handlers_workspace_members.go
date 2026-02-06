@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
@@ -83,18 +84,36 @@ func (h *Handlers) PostAddWorkspaceMember(c *gin.Context) {
 		return
 	}
 
+	identifier := strings.TrimSpace(c.PostForm("identifier"))
 	email := strings.TrimSpace(c.PostForm("email"))
+	userIDInput := strings.TrimSpace(c.PostForm("user_id"))
+	if identifier == "" {
+		if email != "" {
+			identifier = email
+		} else {
+			identifier = userIDInput
+		}
+	}
 	role := workspaces.Role(strings.TrimSpace(c.PostForm("role")))
 	if role == "" {
 		role = workspaces.RoleMember
 	}
 
-	if email == "" {
-		c.Redirect(http.StatusSeeOther, "/app/workspaces/"+url.PathEscape(w.ID)+"?flash="+url.QueryEscape("Email is required"))
+	if identifier == "" {
+		c.Redirect(http.StatusSeeOther, "/app/workspaces/"+url.PathEscape(w.ID)+"?flash="+url.QueryEscape("Email or User ID is required"))
 		return
 	}
 
-	err := h.Workspaces.AddMemberByEmail(c.Request.Context(), wsID, email, role)
+	var err error
+	if strings.Contains(identifier, "@") {
+		err = h.Workspaces.AddMemberByEmail(c.Request.Context(), wsID, identifier, role)
+	} else {
+		if _, parseErr := uuid.Parse(identifier); parseErr != nil {
+			c.Redirect(http.StatusSeeOther, "/app/workspaces/"+url.PathEscape(w.ID)+"?flash="+url.QueryEscape("Invalid user id"))
+			return
+		}
+		err = h.Workspaces.AddMemberByUserID(c.Request.Context(), wsID, identifier, role)
+	}
 	if err != nil {
 		msg := "Could not add member"
 		switch {

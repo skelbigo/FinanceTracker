@@ -55,6 +55,22 @@ func (s *Service) AddMemberByEmail(ctx context.Context, workspaceID, email strin
 	return nil
 }
 
+func (s *Service) AddMemberByUserID(ctx context.Context, workspaceID, userID string, role Role) error {
+	userID = strings.TrimSpace(userID)
+
+	if role != RoleOwner && role != RoleMember && role != RoleViewer {
+		return ErrInvalidRole
+	}
+	if userID == "" {
+		return ErrUserNotFound
+	}
+
+	if err := s.repo.AddMemberByUserID(ctx, workspaceID, userID, role); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) UpdateMemberRole(ctx context.Context, workspaceID, actorUserID, targetUserID string, newRole Role) error {
 	if newRole != RoleOwner && newRole != RoleMember && newRole != RoleViewer {
 		return ErrInvalidRole

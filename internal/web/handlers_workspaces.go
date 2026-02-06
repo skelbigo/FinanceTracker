@@ -34,8 +34,7 @@ func (h *Handlers) GetWorkspacesPage(c *gin.Context) {
 	current, _ := c.Cookie(CurrentWorkspaceCookie)
 
 	h.render(c, "app/workspaces.html", gin.H{
-		"Title": "Workspaces",
-		// app-solid removes the light split band at the bottom of the page.
+		"Title":     "Workspaces",
 		"BodyClass": "app-dark app-solid",
 		"MainClass": "ws-main",
 		"Flash":     c.Query("flash"),
@@ -76,7 +75,7 @@ func (h *Handlers) PostCreateWorkspace(c *gin.Context) {
 	}
 
 	setCurrentWorkspaceCookie(c, h.CookieCfg, w.ID)
-	c.Redirect(http.StatusSeeOther, "/app?flash="+url.QueryEscape("Workspace created"))
+	c.Redirect(http.StatusSeeOther, "/app/workspaces/"+url.PathEscape(w.ID)+"?flash="+url.QueryEscape("Workspace created"))
 }
 
 func (h *Handlers) PostSelectWorkspace(c *gin.Context) {

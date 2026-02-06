@@ -170,8 +170,13 @@ VALUES ($1::uuid, $2::uuid, $3)
 	_, err := r.pool.Exec(ctx, q, workspaceID, userID, string(role))
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return ErrAlreadyMember
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return ErrAlreadyMember
+			}
+			if pgErr.Code == "23503" && strings.Contains(pgErr.ConstraintName, "user") {
+				return ErrUserNotFound
+			}
 		}
 		return err
 	}
