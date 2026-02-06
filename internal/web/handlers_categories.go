@@ -78,6 +78,10 @@ func (h *Handlers) PostCreateCategory(c *gin.Context) {
 		return
 	}
 
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "cat_errors", "/app/categories") {
+		return
+	}
+
 	name := c.PostForm("name")
 	t := normalizeCategoryType(c.PostForm("type"))
 	if !isValidCategoryType(t) {
@@ -125,6 +129,10 @@ func (h *Handlers) PostUpdateCategory(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "cat_errors", "/app/categories") {
 		return
 	}
 
@@ -180,6 +188,10 @@ func (h *Handlers) PostDeleteCategory(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "cat_errors", "/app/categories") {
 		return
 	}
 

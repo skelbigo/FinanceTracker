@@ -103,6 +103,7 @@ func (h *Handlers) GetBudgetsPage(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "workspace not set")
 		return
 	}
+
 	wsUUID, err := uuid.Parse(wsID)
 	if err != nil {
 		c.String(http.StatusBadRequest, "invalid workspace id")
@@ -201,6 +202,10 @@ func (h *Handlers) PostCreateBudget(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "budget_errors", "/app/budgets") {
 		return
 	}
 	wsUUID, err := uuid.Parse(wsID)
@@ -332,6 +337,10 @@ func (h *Handlers) PostUpdateBudget(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "budget_errors", "/app/budgets") {
 		return
 	}
 	wsUUID, err := uuid.Parse(wsID)
@@ -504,6 +513,10 @@ func (h *Handlers) PostDeleteBudget(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "budget_errors", "/app/budgets") {
 		return
 	}
 	wsUUID, err := uuid.Parse(wsID)

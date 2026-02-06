@@ -3,7 +3,6 @@ package web
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"time"
 
@@ -39,7 +38,7 @@ type analyticsVM struct {
 	Expense          string
 	Net              string
 	Top              []analyticsTopRowVM
-	ChartJSON        template.JS
+	ChartJSON        string
 }
 
 func (h *Handlers) GetAnalyticsPage(c *gin.Context) {
@@ -157,10 +156,7 @@ func (h *Handlers) GetAnalyticsPage(c *gin.Context) {
 		chart.Expense = append(chart.Expense, float64(p.Expense)/100.0)
 		chart.Net = append(chart.Net, float64(p.Net)/100.0)
 	}
-	chartBytes, jerr := json.Marshal(chart)
-	if jerr != nil {
-		chartBytes = []byte(`{"labels":[],"income":[],"expense":[],"net":[],"currency":""}`)
-	}
+	chartBytes, _ := json.Marshal(chart)
 
 	vm := analyticsVM{
 		Period:           period,
@@ -172,7 +168,7 @@ func (h *Handlers) GetAnalyticsPage(c *gin.Context) {
 		Income:           formatMinor(resp.Totals.Income),
 		Expense:          formatMinor(resp.Totals.Expense),
 		Net:              formatMinor(resp.Totals.Net),
-		ChartJSON:        template.JS(string(chartBytes)),
+		ChartJSON:        string(chartBytes),
 	}
 
 	vm.Top = make([]analyticsTopRowVM, 0, len(resp.TopCategories))

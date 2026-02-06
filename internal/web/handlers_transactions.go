@@ -260,6 +260,10 @@ func (h *Handlers) PostCreateTransaction(c *gin.Context) {
 		return
 	}
 
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "tx_form_errors", "/app/transactions") {
+		return
+	}
+
 	userID := c.GetString(auth.CtxUserIDKey)
 	if userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -362,6 +366,10 @@ func (h *Handlers) PostUpdateTransaction(c *gin.Context) {
 		return
 	}
 
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "tx_form_errors", "/app/transactions") {
+		return
+	}
+
 	txID := strings.TrimSpace(c.Param("id"))
 	if txID == "" {
 		c.String(http.StatusBadRequest, "missing id")
@@ -430,6 +438,10 @@ func (h *Handlers) PostDeleteTransaction(c *gin.Context) {
 	wsID := c.GetString(workspaces.CtxWorkspaceIDKey)
 	if wsID == "" {
 		c.String(http.StatusInternalServerError, "workspace not set")
+		return
+	}
+
+	if !h.requireWorkspaceRoleForMutation(c, workspaces.RoleMember, "tx_form_errors", "/app/transactions") {
 		return
 	}
 
