@@ -109,6 +109,14 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	deps.Budgets.RegisterRoutes(r)
 	deps.Analytics.RegisterRoutes(r)
 
+	api := r.Group("/api")
+	deps.Auth.RegisterRoutes(api)
+	deps.Workspaces.RegisterRoutes(api)
+	deps.Categories.RegisterRoutes(api)
+	deps.Transactions.RegisterRoutes(api)
+	deps.Budgets.RegisterRoutes(api)
+	deps.Analytics.RegisterRoutes(api)
+
 	return r
 }
 
