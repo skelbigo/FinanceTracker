@@ -31,6 +31,38 @@
           </span>
         </a>
 
+        <div class="app-header-center">
+            <nav class="app-nav" aria-label="Primary">
+                <a class="app-nav-link" href="/app/workspaces">Workspaces</a>
+            </nav>
+
+            <div class="ws-switcher">
+                {{ if or .HeaderWorkspaces .Items }}
+                <form class="ws-switcher-form" action="/app/workspaces/select" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+                    <input type="hidden" name="return_to" value="{{ if .ReturnTo }}{{ .ReturnTo }}{{ end }}">
+
+                    <label class="ws-switcher-kicker" for="ws-switcher-select">Workspace</label>
+                    <select id="ws-switcher-select" class="ws-switcher-select" name="workspace_id" onchange="this.form.submit()">
+                        {{ if .HeaderWorkspaces }}
+                        {{ range .HeaderWorkspaces }}
+                        <option value="{{ .ID }}" {{ if or (and $.HeaderWorkspaceID (eq .ID $.HeaderWorkspaceID)) (and $.CurrentID (eq .ID $.CurrentID)) }}selected{{ end }}>{{ .Name }}{{ if .Role }} ({{ .Role }}){{ end }}</option>
+                        {{ end }}
+                        {{ else }}
+                        {{ range .Items }}
+                        <option value="{{ .ID }}" {{ if or (and $.HeaderWorkspaceID (eq .ID $.HeaderWorkspaceID)) (and $.CurrentID (eq .ID $.CurrentID)) }}selected{{ end }}>{{ .Name }} ({{ .Role }})</option>
+                        {{ end }}
+                        {{ end }}
+                    </select>
+                </form>
+                {{ else }}
+                {{ with .Workspace }}
+                <div class="ws-switcher-readonly" title="Active workspace">{{ .Name }}</div>
+                {{ end }}
+                {{ end }}
+            </div>
+        </div>
+
         <form class="app-logout" action="/logout" method="post">
             <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
             <button class="app-logout-btn" type="submit">Logout</button>
