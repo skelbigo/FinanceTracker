@@ -134,7 +134,8 @@ func TestAnalytics_CacheAndInvalidation(t *testing.T) {
 	}
 
 	txRepo := transactions.NewRepo(pool)
-	txSvc := transactions.NewService(txRepo, nil, idx)
+	txCatLookup := transactions.NewCategoryLookup(pool)
+	txSvc := transactions.NewService(txRepo, nil, txCatLookup, idx)
 	catStr := foodID.String()
 	_, err = txSvc.Create(ctx, transactions.Transaction{
 		WorkspaceID: wsID.String(),

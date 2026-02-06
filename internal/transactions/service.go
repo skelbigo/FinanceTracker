@@ -12,14 +12,19 @@ type OverspendChecker interface {
 	CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error)
 }
 
+type CategoryLookup interface {
+	ExistsInWorkspace(ctx context.Context, workspaceID, categoryID uuid.UUID) (bool, error)
+}
+
 type Service struct {
 	repo    *Repo
 	budgetC OverspendChecker
+	cats    CategoryLookup
 	inv     analytics.CacheIndex
 }
 
-func NewService(repo *Repo, budgetChecker OverspendChecker, inv analytics.CacheIndex) *Service {
-	return &Service{repo: repo, budgetC: budgetChecker, inv: inv}
+func NewService(repo *Repo, budgetChecker OverspendChecker, cats CategoryLookup, inv analytics.CacheIndex) *Service {
+	return &Service{repo: repo, budgetC: budgetChecker, cats: cats, inv: inv}
 }
 
 type ListResult struct {
@@ -30,6 +35,9 @@ type ListResult struct {
 }
 
 func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error) {
+	if err := s.validateCategory(ctx, t.WorkspaceID, t.CategoryID); err != nil {
+		return Transaction{}, err
+	}
 	out, err := s.repo.Create(ctx, t)
 	if err != nil {
 		return Transaction{}, err
@@ -82,6 +90,9 @@ func (s *Service) GetByID(ctx context.Context, workspaceID, txID string) (Transa
 }
 
 func (s *Service) Update(ctx context.Context, t Transaction) (Transaction, error) {
+	if err := s.validateCategory(ctx, t.WorkspaceID, t.CategoryID); err != nil {
+		return Transaction{}, err
+	}
 	out, err := s.repo.Update(ctx, t)
 	if err != nil {
 		return Transaction{}, err
@@ -144,4 +155,32 @@ func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) 
 	if _, err := s.budgetC.CheckOverspend(ctx, wsID, catID, tx.Currency, tx.OccurredAt); err != nil {
 		log.Printf("transactions: overspend check failed (workspace=%s category=%s): %v", wsID, catID, err)
 	}
+}
+
+func (s *Service) validateCategory(ctx context.Context, workspaceID string, categoryID *string) error {
+	if categoryID == nil {
+		return nil
+	}
+	if s.cats == nil {
+		// allow using the service without a category lookup (tests / minimal wiring)
+		return nil
+	}
+
+	wsID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return ErrCategoryNotFound
+	}
+	catID, err := uuid.Parse(*categoryID)
+	if err != nil {
+		return ErrCategoryNotFound
+	}
+
+	ok, err := s.cats.ExistsInWorkspace(ctx, wsID, catID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrCategoryNotFound
+	}
+	return nil
 }

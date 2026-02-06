@@ -54,7 +54,8 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	rdb := redisx.NewClient(cfg)
 	aCacheIndex := analytics.NewCacheIndex(rdb)
 
-	txSvc := transactions.NewService(txRepo, bSvc, aCacheIndex)
+	txCatLookup := transactions.NewCategoryLookup(pool)
+	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup, aCacheIndex)
 	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
 
 	// analytics

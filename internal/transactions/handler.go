@@ -47,7 +47,6 @@ type createTxReq struct {
 	Tags        []string `json:"tags"`
 }
 
-// updateTxReq matches createTxReq; we keep it separate for clarity.
 type updateTxReq struct {
 	Type        string   `json:"type" binding:"required"`
 	AmountMinor int64    `json:"amount_minor" binding:"required"`
@@ -136,6 +135,10 @@ func (h *Handler) create(c *gin.Context) {
 
 	out, err := h.svc.Create(c.Request.Context(), tx)
 	if err != nil {
+		if errors.Is(err, ErrCategoryNotFound) {
+			httpx.NotFound(c, "category not found")
+			return
+		}
 		httpx.Internal(c)
 		log.Printf("transactions.create: %v", err)
 		return
@@ -355,6 +358,10 @@ func (h *Handler) update(c *gin.Context) {
 
 	out, err := h.svc.Update(c.Request.Context(), tx)
 	if err != nil {
+		if errors.Is(err, ErrCategoryNotFound) {
+			httpx.NotFound(c, "category not found")
+			return
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.NotFound(c, "transaction not found")
 			return
