@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"log"
 	"time"
 
@@ -274,10 +273,7 @@ func (s *Service) bestEffortEmail(ctx context.Context, n Notification, toEmail s
 		return
 	}
 
-	subject := n.Title
-	link := fmt.Sprintf("%s/app/notifications", s.opts.PublicURL)
-	bodyHTML := template.HTML(fmt.Sprintf("<p>%s</p>", template.HTMLEscapeString(n.Body)))
-	html, err := renderEmail(n.Title, bodyHTML, "Open notifications", link)
+	subject, html, err := renderNotificationEmail(n, s.opts.PublicURL)
 	if err != nil {
 		log.Printf("email render: %v", err)
 		return
