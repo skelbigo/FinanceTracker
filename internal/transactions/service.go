@@ -173,7 +173,7 @@ func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) 
 	}
 
 	for _, ev := range res.NewEvents {
-		s.notifs.NotifyOverspending(ctx, tx.WorkspaceID, tx.UserID, ev)
+		s.notifs.NotifyOverspending(ctx, tx.WorkspaceID, tx.UserID, tx.ID, tx.AmountMinor, tx.Currency, tx.OccurredAt, ev)
 	}
 }
 

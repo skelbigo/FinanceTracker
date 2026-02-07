@@ -172,25 +172,43 @@ func (s *Service) NotifyNewTransaction(ctx context.Context, workspaceID string, 
 	}
 }
 
-func (s *Service) NotifyOverspending(ctx context.Context, workspaceID string, actorUserID string, ev budgets.BudgetEvent) {
+func (s *Service) NotifyOverspending(
+	ctx context.Context,
+	workspaceID string,
+	actorUserID string,
+	triggerTxID string,
+	triggerAmountMinor int64,
+	triggerCurrency string,
+	triggerOccurredAt time.Time,
+	ev budgets.BudgetEvent,
+) {
 	members, err := s.members.ListMembersInfo(ctx, workspaceID)
 	if err != nil {
 		log.Printf("NotifyOverspending: list members: %v", err)
 		return
 	}
 	for _, m := range members {
+		if m.Role != workspaces.RoleOwner && m.Role != workspaces.RoleMember {
+			continue
+		}
+
 		if m.UserID == actorUserID && len(members) > 1 {
 			continue
 		}
 		ws := workspaceID
 		payload := map[string]any{
-			"budget_id":    ev.BudgetID,
-			"category_id":  ev.CategoryID,
-			"period_start": ev.PeriodStart,
-			"period_end":   ev.PeriodEnd,
-			"spent_minor":  ev.SpentMinor,
-			"limit_minor":  ev.LimitMinor,
-			"currency":     ev.Currency,
+			"trigger_transaction_id": triggerTxID,
+			"trigger_amount_minor":   triggerAmountMinor,
+			"trigger_currency":       triggerCurrency,
+			"trigger_occurred_at":    triggerOccurredAt,
+			"trigger_user_id":        actorUserID,
+			"budget_id":              ev.BudgetID,
+			"category_id":            ev.CategoryID,
+			"period_start":           ev.PeriodStart,
+			"period_end":             ev.PeriodEnd,
+			"spent_minor":            ev.SpentMinor,
+			"limit_minor":            ev.LimitMinor,
+			"currency":               ev.Currency,
 		}
 		title := "Budget overspent"
 		body := fmt.Sprintf("Spent %s %d over limit %d", ev.Currency, ev.SpentMinor, ev.LimitMinor)
