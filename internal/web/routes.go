@@ -50,7 +50,6 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 
 	app := webGroup.Group("/app")
 	app.Use(RequireAuth(h.JWTM, h.Auth, h.CookieCfg, h.AccessTTL, h.RefreshTTL))
-	app.GET("", h.GetDashboard)
 
 	app.GET("/workspaces", h.GetWorkspacesPage)
 	app.POST("/workspaces", h.PostCreateWorkspace)
@@ -63,6 +62,7 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 
 	withWS := app.Group("")
 	withWS.Use(h.RequireWorkspace())
+	withWS.GET("", h.GetDashboard)
 	withWS.GET("/categories", h.GetCategoriesPage)
 	withWS.POST("/categories", h.PostCreateCategory)
 	withWS.POST("/categories/:id/update", h.PostUpdateCategory)

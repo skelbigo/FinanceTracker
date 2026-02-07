@@ -7,6 +7,96 @@
   <h1 class="dash-title">Dashboard</h1>
   <p class="dash-subtitle">Here you will find brief statistics: expenses/income, budgets, recent transactions.</p>
 
+  <div class="dash-grid" role="group" aria-label="Summary">
+    <div class="dash-card">
+      <div class="dash-card-label">Income</div>
+      <div class="dash-card-value">{{ .Summary.Income }} <span class="dash-card-cur">{{ .Summary.Currency }}</span></div>
+      <div class="dash-card-meta">{{ .Summary.From }} → {{ .Summary.To }}</div>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-label">Expenses</div>
+      <div class="dash-card-value">{{ .Summary.Expense }} <span class="dash-card-cur">{{ .Summary.Currency }}</span></div>
+      <div class="dash-card-meta">{{ .Summary.From }} → {{ .Summary.To }}</div>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-label">Net</div>
+      <div class="dash-card-value">{{ .Summary.Net }} <span class="dash-card-cur">{{ .Summary.Currency }}</span></div>
+      <div class="dash-card-meta">{{ .Summary.From }} → {{ .Summary.To }}</div>
+    </div>
+  </div>
+
+  <div class="dash-sections">
+    <section class="dash-section" aria-label="Recent transactions">
+      <div class="dash-section-head">
+        <h2 class="dash-section-title">Recent transactions</h2>
+        <a class="dash-section-link" href="/app/transactions">View all</a>
+      </div>
+
+      <div class="tx-table-wrap dash-table" role="region" tabindex="0">
+        <table class="tx-table">
+          <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Type</th>
+            <th scope="col">Category</th>
+            <th scope="col" class="tx-th-amount">Amount</th>
+            <th scope="col">Note</th>
+          </tr>
+          </thead>
+          <tbody>
+          {{ range .RecentTx }}
+          <tr>
+            <td>{{ .Occurred }}</td>
+            <td>{{ .Type }}</td>
+            <td>{{ .Category }}</td>
+            <td class="tx-td-amount">{{ .Amount }} {{ .Currency }}</td>
+            <td>{{ .Note }}</td>
+          </tr>
+          {{ else }}
+          <tr><td colspan="5">No transactions yet</td></tr>
+          {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="dash-section" aria-label="Budgets snapshot">
+      <div class="dash-section-head">
+        <h2 class="dash-section-title">Budgets</h2>
+        <a class="dash-section-link" href="/app/budgets">Open</a>
+      </div>
+
+      <div class="dash-budgets-kpis">
+        <div class="dash-kpi">
+          <div class="dash-kpi-label">Total</div>
+          <div class="dash-kpi-value">{{ .BudgetsTotal }}</div>
+        </div>
+        <div class="dash-kpi">
+          <div class="dash-kpi-label">Overspent</div>
+          <div class="dash-kpi-value">{{ .BudgetsOverspent }}</div>
+        </div>
+      </div>
+
+      <div class="dash-budget-list" role="list">
+        {{ range .TopBudgets }}
+        <div class="dash-budget" role="listitem">
+          <div class="dash-budget-main">
+            <div class="dash-budget-title">{{ .Category }} <span class="dash-budget-period">({{ .Period }})</span></div>
+            <div class="dash-budget-meta">{{ .Spent }} / {{ .Limit }} {{ .Currency }}</div>
+          </div>
+          <div class="dash-budget-bar" aria-label="Budget usage">
+            <div class="dash-budget-bar-fill" style="width: {{ .PercentUsed }}%"></div>
+          </div>
+        </div>
+        {{ else }}
+        <div class="dash-empty">No budgets yet</div>
+        {{ end }}
+      </div>
+    </section>
+  </div>
+
   <ul class="dash-links">
     <li><a href="/app/transactions">Transactions</a></li>
     <li><a href="/app/budgets">Budgets</a></li>
