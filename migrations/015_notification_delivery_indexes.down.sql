@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_notification_delivery_status_created;
+DROP INDEX IF EXISTS idx_notification_delivery_notification_channel;
