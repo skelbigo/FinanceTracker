@@ -191,7 +191,15 @@ func (s *Service) NotifyOverspending(ctx context.Context, workspaceID string, ac
 
 func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 	if s.push != nil && s.push.Enabled() {
-		_ = s.push.Send(n.UserID.String(), map[string]any{"notification_id": n.ID.String(), "type": n.Type})
+		err := s.push.Send(n.UserID.String(), map[string]any{"notification_id": n.ID.String(), "type": n.Type})
+		if err != nil {
+			errTxt := err.Error()
+			_ = s.repo.InsertDelivery(ctx, n.ID, ChannelPush, StatusFailed, &errTxt, 1, nil)
+			log.Printf("push send: %v", err)
+			return
+		}
+		now := time.Now()
+		_ = s.repo.InsertDelivery(ctx, n.ID, ChannelPush, StatusSent, nil, 1, &now)
 	}
 }
 

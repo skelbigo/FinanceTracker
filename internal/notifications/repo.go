@@ -147,7 +147,13 @@ func (r *Repo) MarkAllRead(ctx context.Context, userID uuid.UUID) (int64, error)
 func (r *Repo) InsertDelivery(ctx context.Context, notificationID uuid.UUID, channel DeliveryChannel, status DeliveryStatus, errText *string, attempts int, sentAt *time.Time) error {
 	const q = `
 INSERT INTO notification_delivery (notification_id, channel, status, error, attempts, sent_at)
-VALUES ($1::uuid, $2, $3, $4, $5, $6);
+VALUES ($1::uuid, $2, $3, $4, $5, $6)
+ON CONFLICT (notification_id, channel) DO UPDATE
+SET
+	status = EXCLUDED.status,
+	error = EXCLUDED.error,
+	attempts = notification_delivery.attempts + EXCLUDED.attempts,
+	sent_at = EXCLUDED.sent_at;
 `
 	_, err := r.pool.Exec(ctx, q, notificationID, string(channel), string(status), errText, attempts, sentAt)
 	return err
