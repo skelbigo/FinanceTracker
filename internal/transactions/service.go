@@ -185,7 +185,17 @@ func (s *Service) notifyNewTransactionBestEffort(ctx context.Context, tx Transac
 	if tx.CategoryID != nil {
 		catID = *tx.CategoryID
 	}
-	s.notifs.NotifyNewTransaction(ctx, tx.WorkspaceID, tx.UserID, tx.ID, tx.AmountMinor, tx.Currency, catID, tx.OccurredAt)
+	s.notifs.NotifyNewTransaction(
+		ctx,
+		tx.WorkspaceID,
+		tx.UserID,
+		tx.ID,
+		tx.AmountMinor,
+		tx.Currency,
+		tx.Type,
+		catID,
+		tx.OccurredAt,
+	)
 }
 
 func (s *Service) validateCategory(ctx context.Context, workspaceID string, catID *string) error {

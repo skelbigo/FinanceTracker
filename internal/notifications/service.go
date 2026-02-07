@@ -140,7 +140,17 @@ func (s *Service) DeletePushSubscription(ctx context.Context, userID string, end
 	return s.repo.DeletePushSubscription(ctx, uid, endpoint)
 }
 
-func (s *Service) NotifyNewTransaction(ctx context.Context, workspaceID string, actorUserID string, txID string, amountMinor int64, currency string, categoryID string, occurredAt time.Time) {
+func (s *Service) NotifyNewTransaction(
+	ctx context.Context,
+	workspaceID string,
+	actorUserID string,
+	txID string,
+	amountMinor int64,
+	currency string,
+	txType string,
+	categoryID string,
+	occurredAt time.Time,
+) {
 	members, err := s.members.ListMembersInfo(ctx, workspaceID)
 	if err != nil {
 		log.Printf("NotifyNewTransaction: list members: %v", err)
@@ -155,12 +165,14 @@ func (s *Service) NotifyNewTransaction(ctx context.Context, workspaceID string, 
 		}
 		ws := workspaceID
 		payload := map[string]any{
-			"transaction_id": txID,
-			"amount_minor":   amountMinor,
-			"currency":       currency,
-			"category_id":    categoryID,
-			"occurred_at":    occurredAt,
-			"created_by":     actorUserID,
+			"transactionId": txID,
+			"amount":        amountMinor,
+			"amountMinor":   amountMinor,
+			"currency":      currency,
+			"type":          txType,
+			"categoryId":    categoryID,
+			"date":          occurredAt,
+			"createdBy":     actorUserID,
 		}
 		title := "New transaction"
 		body := fmt.Sprintf("A new transaction was added (%s %d)", currency, amountMinor)
