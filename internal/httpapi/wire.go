@@ -7,6 +7,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/config"
+	"github.com/skelbigo/FinanceTracker/internal/notifications"
 	"github.com/skelbigo/FinanceTracker/internal/redisx"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
@@ -47,6 +48,29 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	bSvc := budgets.NewService(bRepo, catLookup, cfg.BudgetsEnforceExpenseCategories)
 	bH := budgets.NewHandler(bSvc, wsRepo, authMW)
 
+	// notifications
+	notifRepo := notifications.NewRepo(pool)
+	var emailSender notifications.EmailSender
+	if cfg.EmailEnabled {
+		emailSender = notifications.NewSMTPSender(notifications.SMTPConfig{
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			User:     cfg.SMTPUser,
+			Password: cfg.SMTPPassword,
+			From:     cfg.EmailFrom,
+			UseTLS:   cfg.SMTPTLS,
+		})
+	} else {
+		emailSender = nil
+	}
+	pushSender := notifications.NoopPushSender{}
+	notifSvc := notifications.NewService(notifRepo, wsRepo, authRepo, emailSender, pushSender, notifications.Options{
+		PublicURL:                 cfg.AppPublicURL,
+		EmailNotifyOverspending:   cfg.EmailNotifyOverspending,
+		EmailNotifyNewTransaction: cfg.EmailNotifyNewTransaction,
+	})
+	notifH := notifications.NewHandler(notifSvc, authMW)
+
 	// transactions
 	txRepo := transactions.NewRepo(pool)
 
@@ -55,7 +79,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	aCacheIndex := analytics.NewCacheIndex(rdb)
 
 	txCatLookup := transactions.NewCategoryLookup(pool)
-	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup, aCacheIndex)
+	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).WithAnalyticsCache(aCacheIndex).WithNotifications(notifSvc)
 	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
 
 	// analytics
@@ -76,17 +100,19 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		CSRFSecret: cfg.CSRFSecret,
 		CSRFTTL:    cfg.CSRFTTL(),
 
-		WorkspacesSvc:   wsSvc,
-		CategoriesSvc:   catSvc,
-		BudgetsSvc:      bSvc,
-		TransactionsSvc: txSvc,
-		AnalyticsSvc:    aSvc,
+		WorkspacesSvc:    wsSvc,
+		CategoriesSvc:    catSvc,
+		BudgetsSvc:       bSvc,
+		TransactionsSvc:  txSvc,
+		AnalyticsSvc:     aSvc,
+		NotificationsSvc: notifSvc,
 
-		Auth:         authH,
-		Workspaces:   wsH,
-		Categories:   catH,
-		Transactions: txH,
-		Budgets:      bH,
-		Analytics:    aH,
+		Auth:          authH,
+		Workspaces:    wsH,
+		Categories:    catH,
+		Transactions:  txH,
+		Budgets:       bH,
+		Analytics:     aH,
+		Notifications: notifH,
 	}
 }

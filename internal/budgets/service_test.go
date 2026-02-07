@@ -80,9 +80,9 @@ func (r *fakeRepo) GetSpentForCategory(ctx context.Context, workspaceID, categor
 	return r.spent[keySpent(categoryID, currency)], nil
 }
 
-func (r *fakeRepo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) error {
+func (r *fakeRepo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error) {
 	r.events = append(r.events, ev)
-	return nil
+	return true, nil
 }
 
 func TestService_ListWithProgress(t *testing.T) {

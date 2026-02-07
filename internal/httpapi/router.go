@@ -2,16 +2,19 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
+
 	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
+	"github.com/skelbigo/FinanceTracker/internal/notifications"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
-	"net/http"
-	"time"
 )
 
 var (
@@ -41,18 +44,20 @@ type RouterDeps struct {
 	CSRFSecret string
 	CSRFTTL    time.Duration
 
-	WorkspacesSvc   *workspaces.Service
-	CategoriesSvc   *categories.Service
-	BudgetsSvc      *budgets.Service
-	TransactionsSvc *transactions.Service
-	AnalyticsSvc    *analytics.Service
+	WorkspacesSvc    *workspaces.Service
+	CategoriesSvc    *categories.Service
+	BudgetsSvc       *budgets.Service
+	TransactionsSvc  *transactions.Service
+	AnalyticsSvc     *analytics.Service
+	NotificationsSvc *notifications.Service
 
-	Auth         RoutesRegistrar
-	Workspaces   RoutesRegistrar
-	Categories   RoutesRegistrar
-	Transactions RoutesRegistrar
-	Budgets      RoutesRegistrar
-	Analytics    RoutesRegistrar
+	Auth          RoutesRegistrar
+	Workspaces    RoutesRegistrar
+	Categories    RoutesRegistrar
+	Transactions  RoutesRegistrar
+	Budgets       RoutesRegistrar
+	Analytics     RoutesRegistrar
+	Notifications RoutesRegistrar
 }
 
 func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
@@ -70,6 +75,7 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 		{"Transactions", deps.Transactions},
 		{"Budgets", deps.Budgets},
 		{"Analytics", deps.Analytics},
+		{"Notifications", deps.Notifications},
 	}
 
 	for _, c := range checks {
@@ -86,16 +92,18 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	webHandlers := &web.Handlers{
 		R: webRenderer,
 
-		Auth:         deps.AuthSvc,
-		Workspaces:   deps.WorkspacesSvc,
-		Categories:   deps.CategoriesSvc,
-		Budgets:      deps.BudgetsSvc,
-		Transactions: deps.TransactionsSvc,
-		Analytics:    deps.AnalyticsSvc,
-		JWTM:         deps.JWTM,
-		CookieCfg:    deps.CookieCfg,
-		AccessTTL:    deps.AccessTTL,
-		RefreshTTL:   deps.RefreshTTL,
+		Auth:          deps.AuthSvc,
+		Workspaces:    deps.WorkspacesSvc,
+		Categories:    deps.CategoriesSvc,
+		Budgets:       deps.BudgetsSvc,
+		Transactions:  deps.TransactionsSvc,
+		Analytics:     deps.AnalyticsSvc,
+		Notifications: deps.NotificationsSvc,
+
+		JWTM:       deps.JWTM,
+		CookieCfg:  deps.CookieCfg,
+		AccessTTL:  deps.AccessTTL,
+		RefreshTTL: deps.RefreshTTL,
 
 		CSRFSecret: deps.CSRFSecret,
 		CSRFTTL:    deps.CSRFTTL,
@@ -108,6 +116,7 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	deps.Transactions.RegisterRoutes(r)
 	deps.Budgets.RegisterRoutes(r)
 	deps.Analytics.RegisterRoutes(r)
+	deps.Notifications.RegisterRoutes(r)
 
 	api := r.Group("/api")
 	deps.Auth.RegisterRoutes(api)
@@ -116,6 +125,7 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	deps.Transactions.RegisterRoutes(api)
 	deps.Budgets.RegisterRoutes(api)
 	deps.Analytics.RegisterRoutes(api)
+	deps.Notifications.RegisterRoutes(api)
 
 	return r
 }

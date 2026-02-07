@@ -210,13 +210,13 @@ WHERE workspace_id=$1
 	return spent, nil
 }
 
-func (r *Repo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) error {
+func (r *Repo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error) {
 	const q = `
 INSERT INTO budget_events (workspace_id, budget_id, category_id, period_start, period_end, spent_minor, limit_minor, currency)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (budget_id, period_start, period_end) DO NOTHING;
 `
-	_, err := r.db.Exec(ctx, q,
+	ct, err := r.db.Exec(ctx, q,
 		ev.WorkspaceID,
 		ev.BudgetID,
 		ev.CategoryID,
@@ -226,5 +226,8 @@ ON CONFLICT (budget_id, period_start, period_end) DO NOTHING;
 		ev.LimitMinor,
 		ev.Currency,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return ct.RowsAffected() > 0, nil
 }

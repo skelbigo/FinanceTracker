@@ -78,6 +78,19 @@ type Config struct {
 	RefreshTTLDays      int
 
 	BudgetsEnforceExpenseCategories bool
+
+	AppPublicURL string
+
+	EmailEnabled bool
+	EmailFrom    string
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+	SMTPTLS      bool
+
+	EmailNotifyOverspending   bool
+	EmailNotifyNewTransaction bool
 }
 
 func Load() (Config, error) {
@@ -181,6 +194,62 @@ func Load() (Config, error) {
 		"BUDGETS_ENFORCE_EXPENSE_CATEGORIES",
 		&errs,
 	)
+	cfg.AppPublicURL = strings.TrimSpace(getDefault("APP_PUBLIC_URL", fmt.Sprintf("http://localhost:%d", cfg.AppPort)))
+
+	emailEnabledVal, emailEnabledSet, emailEnabledErr := parseBoolOptional(strings.TrimSpace(os.Getenv("EMAIL_ENABLED")), "EMAIL_ENABLED")
+	if emailEnabledErr != nil {
+		errs = append(errs, emailEnabledErr)
+	}
+	cfg.EmailEnabled = emailEnabledSet && emailEnabledVal
+	cfg.EmailFrom = strings.TrimSpace(getDefault("EMAIL_FROM", "no-reply@financetracker.local"))
+	cfg.SMTPHost = strings.TrimSpace(os.Getenv("SMTP_HOST"))
+	cfg.SMTPPort = mustInt(getDefault("SMTP_PORT", "587"), "SMTP_PORT", &errs)
+	cfg.SMTPUser = strings.TrimSpace(os.Getenv("SMTP_USER"))
+	cfg.SMTPPassword = strings.TrimSpace(os.Getenv("SMTP_PASSWORD"))
+
+	smtpTLSVal, smtpTLSSet, smtpTLSErr := parseBoolOptional(strings.TrimSpace(os.Getenv("SMTP_TLS")), "SMTP_TLS")
+	if smtpTLSErr != nil {
+		errs = append(errs, smtpTLSErr)
+	}
+	if smtpTLSSet {
+		cfg.SMTPTLS = smtpTLSVal
+	} else {
+		cfg.SMTPTLS = true
+	}
+
+	overRaw := strings.TrimSpace(os.Getenv("EMAIL_NOTIFY_OVERSPENDING"))
+	if overRaw == "" {
+		overRaw = strings.TrimSpace(os.Getenv("EMAIL_NOTIFY_OVESPENDING"))
+	}
+	overVal, overSet, overErr := parseBoolOptional(overRaw, "EMAIL_NOTIFY_OVERSPENDING")
+	if overErr != nil {
+		errs = append(errs, overErr)
+	}
+	if overSet {
+		cfg.EmailNotifyOverspending = overVal
+	} else {
+		cfg.EmailNotifyOverspending = true
+	}
+
+	txRaw := strings.TrimSpace(os.Getenv("EMAIL_NOTIFY_NEW_TRANSACTION"))
+	txVal, txSet, txErr := parseBoolOptional(txRaw, "EMAIL_NOTIFY_NEW_TRANSACTION")
+	if txErr != nil {
+		errs = append(errs, txErr)
+	}
+	if txSet {
+		cfg.EmailNotifyNewTransaction = txVal
+	} else {
+		cfg.EmailNotifyNewTransaction = false
+	}
+
+	if cfg.EmailEnabled {
+		if cfg.SMTPHost == "" {
+			errs = append(errs, fmt.Errorf("EMAIL_ENABLED=true requires SMTP_HOST"))
+		}
+		if cfg.EmailFrom == "" {
+			errs = append(errs, fmt.Errorf("EMAIL_ENABLED=true requires EMAIL_FROM"))
+		}
+	}
 
 	if cfg.JWTAccessTTLMinutes <= 0 || cfg.JWTAccessTTLMinutes > 24*60 {
 		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES out of range: %d", cfg.JWTAccessTTLMinutes))

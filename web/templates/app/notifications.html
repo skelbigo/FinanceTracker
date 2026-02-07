@@ -1,0 +1,58 @@
+{{ define "content" }}
+<section class="tx-wrap" aria-label="Notifications">
+    <div class="tx-nav">
+        <a class="wm-back" href="/app">← Back to Dashboard</a>
+    </div>
+
+    <h1 class="tx-title">Notifications</h1>
+
+    <div class="notif-toolbar">
+        <div class="notif-filters" role="group" aria-label="Filters">
+            <a class="notif-filter {{ if not .OnlyUnread }}is-active{{ end }}" href="/app/notifications?limit={{ .Limit }}">All</a>
+            <a class="notif-filter {{ if .OnlyUnread }}is-active{{ end }}" href="/app/notifications?onlyUnread=true&limit={{ .Limit }}">Unread</a>
+        </div>
+
+        <form method="post" action="/app/notifications/read-all" class="notif-readall">
+            <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+            <button class="tx-btn tx-btn--ghost" type="submit" {{ if eq .UnreadCount 0 }}disabled{{ end }}>Mark all read</button>
+        </form>
+    </div>
+
+    <p class="notif-meta">Unread: <strong>{{ .UnreadCount }}</strong></p>
+
+    <div class="notif-list">
+        {{ range .Notifications }}
+        <article class="notif-card {{ if .IsRead }}notif-read{{ else }}notif-unread{{ end }}">
+            <header class="notif-head">
+                <div class="notif-title">
+                    {{ if not .IsRead }}<span class="notif-dot" aria-hidden="true"></span>{{ end }}
+                    {{ .Title }}
+                </div>
+                <div class="notif-time">{{ .CreatedAt }}</div>
+            </header>
+
+            <p class="notif-body">{{ .Body }}</p>
+
+            <footer class="notif-actions">
+                {{ if not .IsRead }}
+                <form method="post" action="/app/notifications/{{ .ID }}/read">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
+                    <button class="tx-btn tx-btn--primary" type="submit">Mark as read</button>
+                </form>
+                {{ else }}
+                <span class="notif-read-label">Read</span>
+                {{ end }}
+            </footer>
+        </article>
+        {{ else }}
+        <div class="notif-empty">No notifications</div>
+        {{ end }}
+    </div>
+
+    {{ if .HasNext }}
+    <div class="notif-pager">
+        <a class="tx-btn tx-btn--ghost" href="/app/notifications?cursor={{ .NextCursor }}&limit={{ .Limit }}{{ if .OnlyUnread }}&onlyUnread=true{{ end }}">Next</a>
+    </div>
+    {{ end }}
+</section>
+{{ end }}

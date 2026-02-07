@@ -2,14 +2,18 @@ package transactions
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"log"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/skelbigo/FinanceTracker/internal/analytics"
+	"github.com/skelbigo/FinanceTracker/internal/budgets"
+	"github.com/skelbigo/FinanceTracker/internal/notifications"
 )
 
 type OverspendChecker interface {
-	CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error)
+	CheckOverspendWithEvents(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (budgets.OverspendResult, error)
 }
 
 type CategoryLookup interface {
@@ -21,10 +25,21 @@ type Service struct {
 	budgetC OverspendChecker
 	cats    CategoryLookup
 	inv     analytics.CacheIndex
+	notifs  *notifications.Service
 }
 
-func NewService(repo *Repo, budgetChecker OverspendChecker, cats CategoryLookup, inv analytics.CacheIndex) *Service {
-	return &Service{repo: repo, budgetC: budgetChecker, cats: cats, inv: inv}
+func NewService(repo *Repo, budgetChecker OverspendChecker, cats CategoryLookup) *Service {
+	return &Service{repo: repo, budgetC: budgetChecker, cats: cats}
+}
+
+func (s *Service) WithAnalyticsCache(inv analytics.CacheIndex) *Service {
+	s.inv = inv
+	return s
+}
+
+func (s *Service) WithNotifications(notifs *notifications.Service) *Service {
+	s.notifs = notifs
+	return s
 }
 
 type ListResult struct {
@@ -44,6 +59,8 @@ func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error
 	}
 
 	s.invalidateAnalyticsBestEffort(ctx, out.WorkspaceID)
+
+	s.notifyNewTransactionBestEffort(ctx, out)
 
 	s.checkOverspendBestEffort(ctx, out)
 	return out, nil
@@ -121,61 +138,74 @@ func (s *Service) invalidateAnalyticsBestEffort(ctx context.Context, workspaceID
 	}
 	wsID, err := uuid.Parse(workspaceID)
 	if err != nil {
+		log.Printf("analytics cache invalidate: invalid workspace id %q: %v", workspaceID, err)
 		return
 	}
-	ctxInv, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if err := s.inv.InvalidateWorkspace(ctxInv, wsID); err != nil {
-		log.Printf("transactions: analytics cache invalidation failed (workspace=%s): %v", wsID, err)
+	if err := s.inv.InvalidateWorkspace(ctx, wsID); err != nil {
+		log.Printf("analytics cache invalidate: %v", err)
 	}
 }
 
 func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) {
-	if s.budgetC == nil {
+	if s.budgetC == nil || s.notifs == nil {
 		return
 	}
-	if tx.Type != TypeExpense {
-		return
-	}
-	if tx.CategoryID == nil {
+	if tx.Type != TypeExpense || tx.CategoryID == nil {
 		return
 	}
 
 	wsID, err := uuid.Parse(tx.WorkspaceID)
 	if err != nil {
-		log.Printf("transactions: overspend check skipped (bad workspace_id=%q): %v", tx.WorkspaceID, err)
 		return
 	}
 	catID, err := uuid.Parse(*tx.CategoryID)
 	if err != nil {
-		log.Printf("transactions: overspend check skipped (bad category_id=%q): %v", *tx.CategoryID, err)
 		return
 	}
 
-	if _, err := s.budgetC.CheckOverspend(ctx, wsID, catID, tx.Currency, tx.OccurredAt); err != nil {
-		log.Printf("transactions: overspend check failed (workspace=%s category=%s): %v", wsID, catID, err)
+	res, err := s.budgetC.CheckOverspendWithEvents(ctx, wsID, catID, tx.Currency, tx.OccurredAt)
+	if err != nil {
+		log.Printf("overspend check: %v", err)
+		return
+	}
+	if !res.Overspent || len(res.NewEvents) == 0 {
+		return
+	}
+
+	for _, ev := range res.NewEvents {
+		s.notifs.NotifyOverspending(ctx, tx.WorkspaceID, tx.UserID, ev)
 	}
 }
 
-func (s *Service) validateCategory(ctx context.Context, workspaceID string, categoryID *string) error {
-	if categoryID == nil {
-		return nil
+func (s *Service) notifyNewTransactionBestEffort(ctx context.Context, tx Transaction) {
+	if s.notifs == nil {
+		return
 	}
+	catID := ""
+	if tx.CategoryID != nil {
+		catID = *tx.CategoryID
+	}
+	s.notifs.NotifyNewTransaction(ctx, tx.WorkspaceID, tx.UserID, tx.ID, tx.AmountMinor, tx.Currency, catID, tx.OccurredAt)
+}
+
+func (s *Service) validateCategory(ctx context.Context, workspaceID string, catID *string) error {
 	if s.cats == nil {
-		// allow using the service without a category lookup (tests / minimal wiring)
+		return nil
+	}
+	if catID == nil || *catID == "" {
 		return nil
 	}
 
-	wsID, err := uuid.Parse(workspaceID)
+	ws, err := uuid.Parse(workspaceID)
 	if err != nil {
-		return ErrCategoryNotFound
+		return err
 	}
-	catID, err := uuid.Parse(*categoryID)
+	cat, err := uuid.Parse(*catID)
 	if err != nil {
-		return ErrCategoryNotFound
+		return err
 	}
 
-	ok, err := s.cats.ExistsInWorkspace(ctx, wsID, catID)
+	ok, err := s.cats.ExistsInWorkspace(ctx, ws, cat)
 	if err != nil {
 		return err
 	}

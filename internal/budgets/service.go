@@ -19,7 +19,7 @@ type BudgetRepo interface {
 	List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error)
 	ListByCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string) ([]Budget, error)
 	GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error)
-	InsertBudgetEvent(ctx context.Context, ev BudgetEvent) error
+	InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error)
 }
 
 type CategoryLookup interface {
@@ -134,29 +134,34 @@ func (s *Service) ListWithProgress(ctx context.Context, workspaceID uuid.UUID, p
 	return out, nil
 }
 
-func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error) {
+type OverspendResult struct {
+	Overspent bool
+	NewEvents []BudgetEvent
+}
+
+func (s *Service) CheckOverspendWithEvents(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (OverspendResult, error) {
 	cur := normalizeCurrency(currency)
 	if !currencyRe.MatchString(cur) {
-		return false, fmt.Errorf("%w: %q", ErrInvalidCurrency, currency)
+		return OverspendResult{}, fmt.Errorf("%w: %q", ErrInvalidCurrency, currency)
 	}
 
 	budgets, err := s.repo.ListByCategory(ctx, workspaceID, categoryID, cur)
 	if err != nil {
-		return false, err
+		return OverspendResult{}, err
 	}
 	if len(budgets) == 0 {
-		return false, nil
+		return OverspendResult{Overspent: false, NewEvents: nil}, nil
 	}
 
-	overspent := false
+	res := OverspendResult{Overspent: false, NewEvents: make([]BudgetEvent, 0)}
 	for _, b := range budgets {
 		start, end := PeriodBounds(now, b.Period)
 		spent, err := s.repo.GetSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
 		if err != nil {
-			return false, err
+			return OverspendResult{}, err
 		}
 		if spent > b.AmountLimitMinor {
-			overspent = true
+			res.Overspent = true
 			ev := BudgetEvent{
 				WorkspaceID: workspaceID,
 				BudgetID:    b.ID,
@@ -167,11 +172,23 @@ func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uu
 				LimitMinor:  b.AmountLimitMinor,
 				Currency:    b.Currency,
 			}
-			if err := s.repo.InsertBudgetEvent(ctx, ev); err != nil {
-				return false, err
+			inserted, err := s.repo.InsertBudgetEvent(ctx, ev)
+			if err != nil {
+				return OverspendResult{}, err
+			}
+			if inserted {
+				res.NewEvents = append(res.NewEvents, ev)
 			}
 		}
 	}
 
-	return overspent, nil
+	return res, nil
+}
+
+func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (bool, error) {
+	res, err := s.CheckOverspendWithEvents(ctx, workspaceID, categoryID, currency, now)
+	if err != nil {
+		return false, err
+	}
+	return res.Overspent, nil
 }

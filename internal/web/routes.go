@@ -4,10 +4,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
+	"github.com/skelbigo/FinanceTracker/internal/notifications"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
@@ -15,13 +17,14 @@ import (
 type Handlers struct {
 	R *Renderer
 
-	Auth         *auth.Service
-	Workspaces   *workspaces.Service
-	Categories   *categories.Service
-	Budgets      *budgets.Service
-	Transactions *transactions.Service
-	Analytics    *analytics.Service
-	JWTM         *auth.JWTManager
+	Auth          *auth.Service
+	Workspaces    *workspaces.Service
+	Categories    *categories.Service
+	Budgets       *budgets.Service
+	Transactions  *transactions.Service
+	Analytics     *analytics.Service
+	Notifications *notifications.Service
+	JWTM          *auth.JWTManager
 
 	CookieCfg  CookieConfig
 	AccessTTL  time.Duration
@@ -53,6 +56,11 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 
 	app.GET("/workspaces", h.GetWorkspacesPage)
 	app.POST("/workspaces", h.PostCreateWorkspace)
+
+	app.GET("/notifications", h.GetNotificationsPage)
+	app.GET("/notifications/goto", h.GetNotificationGoto)
+	app.POST("/notifications/:id/read", h.PostNotificationRead)
+	app.POST("/notifications/read-all", h.PostNotificationsReadAll)
 
 	app.POST("/workspaces/select", h.PostSelectWorkspace)
 	app.GET("/workspaces/:id", h.GetWorkspaceMembersPage)

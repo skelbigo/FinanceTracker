@@ -1707,3 +1707,18 @@ body.auth::after {
         flex-wrap: wrap;
     }
 }
+
+
+/* Notifications */
+.notif-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+.notif-item { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(255,255,255,0.03); }
+.notif-item.is-read { opacity: 0.75; }
+.notif-title { font-weight: 700; margin-bottom: 6px; }
+.notif-body { color: rgba(255,255,255,0.82); margin-bottom: 10px; }
+.notif-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); }
+.pill-unread { border-color: rgba(0,210,198,0.6); }
+.notif-actions { display: flex; align-items: flex-start; }
+.empty { padding: 18px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 14px; color: rgba(255,255,255,0.75); }
+.page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
