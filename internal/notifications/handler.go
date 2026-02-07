@@ -109,14 +109,22 @@ func (h *Handler) patch(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var b patchBody
-	_ = c.ShouldBindJSON(&b)
-	val := false
-	if b.IsRead != nil {
-		val = *b.IsRead
-	} else if b.IsReadAlt != nil {
-		val = *b.IsReadAlt
+	if err := c.ShouldBindJSON(&b); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json body"})
+		return
 	}
-	if !val {
+
+	var val *bool
+	if b.IsRead != nil {
+		val = b.IsRead
+	} else if b.IsReadAlt != nil {
+		val = b.IsReadAlt
+	}
+	if val == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "isRead is required"})
+		return
+	}
+	if !*val {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "isRead must be true"})
 		return
 	}
@@ -129,7 +137,7 @@ func (h *Handler) patch(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	c.Status(http.StatusNoContent)
 }
 
 func (h *Handler) read(c *gin.Context) {
