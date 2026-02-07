@@ -173,6 +173,7 @@ func (s *Service) NotifyNewTransaction(
 			"categoryId":    categoryID,
 			"date":          occurredAt,
 			"createdBy":     actorUserID,
+			"recipientRole": string(m.Role),
 		}
 		title := "New transaction"
 		body := fmt.Sprintf("A new transaction was added (%s %d)", currency, amountMinor)
@@ -252,7 +253,9 @@ func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 		}
 	case TypeNewTransaction:
 		if s.opts.EmailNotifyNewTransaction {
-			s.bestEffortEmail(ctx, n, "")
+			if role, ok := n.Payload["recipientRole"].(string); ok && role == string(workspaces.RoleOwner) {
+				s.bestEffortEmail(ctx, n, "")
+			}
 		}
 	}
 }
