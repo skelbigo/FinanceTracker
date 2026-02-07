@@ -164,13 +164,10 @@ func (s *Service) NotifyNewTransaction(ctx context.Context, workspaceID string, 
 		}
 		title := "New transaction"
 		body := fmt.Sprintf("A new transaction was added (%s %d)", currency, amountMinor)
-		n, err := s.CreateInApp(ctx, m.UserID, &ws, TypeNewTransaction, title, body, payload)
+		_, err := s.CreateInApp(ctx, m.UserID, &ws, TypeNewTransaction, title, body, payload)
 		if err != nil {
 			log.Printf("NotifyNewTransaction: create notif: %v", err)
 			continue
-		}
-		if s.opts.EmailNotifyNewTransaction {
-			s.bestEffortEmail(ctx, n, m.Email)
 		}
 	}
 }
@@ -197,13 +194,10 @@ func (s *Service) NotifyOverspending(ctx context.Context, workspaceID string, ac
 		}
 		title := "Budget overspent"
 		body := fmt.Sprintf("Spent %s %d over limit %d", ev.Currency, ev.SpentMinor, ev.LimitMinor)
-		n, err := s.CreateInApp(ctx, m.UserID, &ws, TypeOverspending, title, body, payload)
+		_, err := s.CreateInApp(ctx, m.UserID, &ws, TypeOverspending, title, body, payload)
 		if err != nil {
 			log.Printf("NotifyOverspending: create notif: %v", err)
 			continue
-		}
-		if s.opts.EmailNotifyOverspending {
-			s.bestEffortEmail(ctx, n, m.Email)
 		}
 	}
 }
@@ -219,6 +213,17 @@ func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 		}
 		now := time.Now()
 		_ = s.repo.InsertDelivery(ctx, n.ID, ChannelPush, StatusSent, nil, 1, &now)
+	}
+
+	switch n.Type {
+	case TypeOverspending:
+		if s.opts.EmailNotifyOverspending {
+			s.bestEffortEmail(ctx, n, "")
+		}
+	case TypeNewTransaction:
+		if s.opts.EmailNotifyNewTransaction {
+			s.bestEffortEmail(ctx, n, "")
+		}
 	}
 }
 
