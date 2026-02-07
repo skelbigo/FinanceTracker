@@ -56,7 +56,9 @@ func (s *SMTPSender) Send(to string, subject string, htmlBody string) error {
 			return err
 		}
 		if s.cfg.UseTLS {
-			_ = c.StartTLS(&tls.Config{ServerName: s.cfg.Host})
+			if err := c.StartTLS(&tls.Config{ServerName: s.cfg.Host}); err != nil {
+				return err
+			}
 		}
 	}
 	defer c.Close()

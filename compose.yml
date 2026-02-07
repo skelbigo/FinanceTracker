@@ -48,5 +48,14 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: financetracker-mailhog
+    profiles: ["mail"]
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    restart: unless-stopped
+
 volumes:
   pgdata:

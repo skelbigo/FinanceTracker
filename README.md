@@ -67,5 +67,25 @@ ANALYTICS_CACHE_TTL_MINUTES=20
 docker compose --profile cache up --build
 ```
 
+### Email (SMTP) (optional)
+
+Notifications can be delivered via SMTP when enabled.
+
+1) Enable email in your `.env`:
+```bash
+EMAIL_ENABLED=true
+EMAIL_FROM=no-reply@financetracker.local
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+SMTP_TLS=false
+```
+
+2) Start MailHog (local SMTP sink):
+```bash
+docker compose --profile mail up --build
+```
+
+MailHog UI: http://localhost:8025
+
 ## License
 This project is licensed under the MIT License.
