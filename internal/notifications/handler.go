@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 )
@@ -163,7 +162,7 @@ func (h *Handler) upsertPushSub(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	_, err := h.svc.repo.UpsertPushSubscription(c.Request.Context(), mustUUID(uid), b.Endpoint, b.Keys)
+	err := h.svc.SavePushSubscription(c.Request.Context(), uid, b.Endpoint, b.Keys)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -182,7 +181,7 @@ func (h *Handler) deletePushSub(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "endpoint is required"})
 		return
 	}
-	ok2, err := h.svc.repo.DeletePushSubscription(c.Request.Context(), mustUUID(uid), endpoint)
+	ok2, err := h.svc.DeletePushSubscription(c.Request.Context(), uid, endpoint)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -192,12 +191,4 @@ func (h *Handler) deletePushSub(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-func mustUUID(s string) uuid.UUID {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return uuid.Nil
-	}
-	return id
 }

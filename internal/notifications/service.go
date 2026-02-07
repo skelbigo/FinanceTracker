@@ -37,6 +37,8 @@ type Service struct {
 	opts    Options
 }
 
+type NotificationService = Service
+
 func NewService(repo *Repo, members MemberLister, users UserLookup, email EmailSender, push PushSender, opts Options) *Service {
 	if opts.PublicURL == "" {
 		opts.PublicURL = "http://localhost:8080"
@@ -119,6 +121,23 @@ func (s *Service) MarkAllRead(ctx context.Context, userID string) (int64, error)
 		return 0, err
 	}
 	return s.repo.MarkAllRead(ctx, uid)
+}
+
+func (s *Service) SavePushSubscription(ctx context.Context, userID string, endpoint string, keys map[string]any) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.UpsertPushSubscription(ctx, uid, endpoint, keys)
+	return err
+}
+
+func (s *Service) DeletePushSubscription(ctx context.Context, userID string, endpoint string) (bool, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return false, err
+	}
+	return s.repo.DeletePushSubscription(ctx, uid, endpoint)
 }
 
 func (s *Service) NotifyNewTransaction(ctx context.Context, workspaceID string, actorUserID string, txID string, amountMinor int64, currency string, categoryID string, occurredAt time.Time) {
