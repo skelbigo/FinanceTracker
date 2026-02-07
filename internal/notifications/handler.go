@@ -62,11 +62,20 @@ func (h *Handler) list(c *gin.Context) {
 			limit = v
 		}
 	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
 	cursor := 0
 	if q.Cursor != "" {
 		if v, err := strconv.Atoi(q.Cursor); err == nil {
 			cursor = v
 		}
+	}
+	if cursor < 0 {
+		cursor = 0
 	}
 
 	res, err := h.svc.ListForUser(c.Request.Context(), uid, onlyUnread, limit, cursor)
@@ -74,7 +83,17 @@ func (h *Handler) list(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, res)
+
+	resp := gin.H{
+		"notifications": res.Notifications,
+		"unreadCount":   res.UnreadCount,
+		"unread_count":  res.UnreadCount,
+	}
+	if res.NextCursor != nil {
+		resp["nextCursor"] = *res.NextCursor
+		resp["next_cursor"] = *res.NextCursor
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 type patchBody struct {

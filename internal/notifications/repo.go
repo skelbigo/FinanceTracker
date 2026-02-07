@@ -61,7 +61,7 @@ RETURNING id, user_id, workspace_id, type, title, body, payload, is_read, create
 	return out, nil
 }
 
-func (r *Repo) ListForUser(ctx context.Context, userID uuid.UUID, onlyUnread bool, limit, offset int) ([]Notification, error) {
+func (r *Repo) ListForUser(ctx context.Context, userID uuid.UUID, onlyUnread bool, limit, offset int) ([]Notification, bool, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -72,7 +72,9 @@ func (r *Repo) ListForUser(ctx context.Context, userID uuid.UUID, onlyUnread boo
 		offset = 0
 	}
 
-	args := []any{userID, limit, offset}
+	queryLimit := limit + 1
+
+	args := []any{userID, queryLimit, offset}
 	where := "WHERE user_id = $1::uuid"
 	if onlyUnread {
 		where += " AND is_read = false"
@@ -88,7 +90,7 @@ LIMIT $2 OFFSET $3;
 
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 
@@ -99,7 +101,7 @@ LIMIT $2 OFFSET $3;
 		var wsID *uuid.UUID
 		var typ string
 		if err := rows.Scan(&n.ID, &n.UserID, &wsID, &typ, &n.Title, &n.Body, &payloadRaw, &n.IsRead, &n.CreatedAt); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		n.WorkspaceID = wsID
 		n.Type = NotificationType(typ)
@@ -112,9 +114,15 @@ LIMIT $2 OFFSET $3;
 		out = append(out, n)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return out, nil
+
+	hasNext := false
+	if len(out) > limit {
+		hasNext = true
+		out = out[:limit]
+	}
+	return out, hasNext, nil
 }
 
 func (r *Repo) CountUnread(ctx context.Context, userID uuid.UUID) (int, error) {

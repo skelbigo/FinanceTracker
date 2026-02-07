@@ -86,7 +86,7 @@ func (s *Service) ListForUser(ctx context.Context, userID string, onlyUnread boo
 	if err != nil {
 		return ListResult{}, err
 	}
-	items, err := s.repo.ListForUser(ctx, uid, onlyUnread, limit, cursor)
+	items, hasNext, err := s.repo.ListForUser(ctx, uid, onlyUnread, limit, cursor)
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -96,7 +96,7 @@ func (s *Service) ListForUser(ctx context.Context, userID string, onlyUnread boo
 	}
 
 	var next *int
-	if len(items) == limit {
+	if hasNext {
 		nc := cursor + limit
 		next = &nc
 	}
