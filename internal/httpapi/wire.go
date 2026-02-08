@@ -63,7 +63,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	} else {
 		emailSender = nil
 	}
-	pushSender := notifications.NoopPushSender{}
+	pushSender := notifications.NoopPushProvider{}
 	notifSvc := notifications.NewService(notifRepo, wsRepo, authRepo, emailSender, pushSender, notifications.Options{
 		PublicURL:                 cfg.AppPublicURL,
 		EmailNotifyOverspending:   cfg.EmailNotifyOverspending,

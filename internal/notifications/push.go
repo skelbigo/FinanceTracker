@@ -2,15 +2,17 @@ package notifications
 
 import "log"
 
-type PushSender interface {
+type PushProvider interface {
 	Send(userID string, payload map[string]any) error
-	Enabled() bool
 }
 
-type NoopPushSender struct{}
+type PushSender = PushProvider
 
-func (NoopPushSender) Send(userID string, payload map[string]any) error {
+type NoopPushProvider struct{}
+
+func (NoopPushProvider) Send(userID string, payload map[string]any) error {
 	log.Printf("noop push: user=%s payload=%v", userID, payload)
 	return nil
 }
-func (NoopPushSender) Enabled() bool { return false }
+
+type NoopPushSender = NoopPushProvider

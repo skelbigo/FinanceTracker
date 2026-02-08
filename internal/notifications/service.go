@@ -33,7 +33,7 @@ type Service struct {
 	members    MemberLister
 	users      UserLookup
 	email      EmailSender
-	push       PushSender
+	push       PushProvider
 	opts       Options
 	emailQueue chan emailJob
 }
@@ -45,7 +45,7 @@ type emailJob struct {
 
 type NotificationService = Service
 
-func NewService(repo *Repo, members MemberLister, users UserLookup, email EmailSender, push PushSender, opts Options) *Service {
+func NewService(repo *Repo, members MemberLister, users UserLookup, email EmailSender, push PushProvider, opts Options) *Service {
 	if opts.PublicURL == "" {
 		opts.PublicURL = "http://localhost:8080"
 	}
@@ -289,7 +289,7 @@ func (s *Service) NotifyOverspending(
 }
 
 func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
-	if s.push != nil && s.push.Enabled() {
+	if s.push != nil {
 		err := s.push.Send(n.UserID.String(), map[string]any{"notification_id": n.ID.String(), "type": n.Type})
 		if err != nil {
 			errTxt := err.Error()
