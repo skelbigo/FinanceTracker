@@ -6,23 +6,23 @@
 
     <h1 class="tx-title">Notifications</h1>
 
-    <div class="notif-toolbar">
+    <div class="notif-toolbar" data-notif-page="1">
         <div class="notif-filters" role="group" aria-label="Filters">
             <a class="notif-filter {{ if not .OnlyUnread }}is-active{{ end }}" href="/app/notifications?limit={{ .Limit }}">All</a>
             <a class="notif-filter {{ if .OnlyUnread }}is-active{{ end }}" href="/app/notifications?onlyUnread=true&limit={{ .Limit }}">Unread</a>
         </div>
 
-        <form method="post" action="/app/notifications/read-all" class="notif-readall">
+        <form method="post" action="/app/notifications/read-all" class="notif-readall js-read-all-form">
             <input type="hidden" name="csrf_token" value="{{ .CSRF }}">
             <button class="tx-btn tx-btn--ghost" type="submit" {{ if eq .UnreadCount 0 }}disabled{{ end }}>Mark all read</button>
         </form>
     </div>
 
-    <p class="notif-meta">Unread: <strong>{{ .UnreadCount }}</strong></p>
+    <p class="notif-meta">Unread: <strong id="notif-unread-count">{{ .UnreadCount }}</strong></p>
 
-    <div class="notif-list">
+    <div class="notif-list" id="notif-list" data-only-unread="{{ if .OnlyUnread }}true{{ else }}false{{ end }}" data-limit="{{ .Limit }}" data-cursor="{{ .Cursor }}">
         {{ range .Notifications }}
-        <article class="notif-card {{ if .IsRead }}notif-read{{ else }}notif-unread{{ end }}">
+        <article class="notif-card {{ if .IsRead }}notif-read{{ else }}notif-unread{{ end }}" data-id="{{ .ID }}" data-is-read="{{ if .IsRead }}true{{ else }}false{{ end }}" data-type="{{ .Type }}">
             <header class="notif-head">
                 <div class="notif-title">
                     {{ if not .IsRead }}<span class="notif-dot" aria-hidden="true"></span>{{ end }}
@@ -36,7 +36,7 @@
             <footer class="notif-actions">
                 <a class="tx-btn tx-btn--ghost" href="{{ .GotoURL }}">{{ .GotoLabel }}</a>
                 {{ if not .IsRead }}
-                <form method="post" action="/app/notifications/{{ .ID }}/read">
+                <form method="post" action="/app/notifications/{{ .ID }}/read" class="js-mark-read-form" data-id="{{ .ID }}">
                     <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">
                     <button class="tx-btn tx-btn--primary" type="submit">Mark as read</button>
                 </form>
@@ -52,7 +52,7 @@
 
     {{ if .HasNext }}
     <div class="notif-pager">
-        <a class="tx-btn tx-btn--ghost" href="/app/notifications?cursor={{ .NextCursor }}&limit={{ .Limit }}{{ if .OnlyUnread }}&onlyUnread=true{{ end }}">Next</a>
+        <a class="tx-btn tx-btn--ghost js-notif-next" href="/app/notifications?cursor={{ .NextCursor }}&limit={{ .Limit }}{{ if .OnlyUnread }}&onlyUnread=true{{ end }}" data-next-cursor="{{ .NextCursor }}">Next</a>
     </div>
     {{ end }}
 </section>
