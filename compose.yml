@@ -43,6 +43,30 @@ services:
     stop_grace_period: 15s
     init: true
 
+  notifications-grpc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financetracker-notifications-grpc
+    env_file: .env
+    volumes:
+      - ./.env:/app/.env:ro
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      GIN_MODE: release
+      NOTIFICATIONS_GRPC_PORT: "9090"
+    command: ["/app/notifications-grpc"]
+    ports:
+      - "${NOTIFICATIONS_GRPC_PORT:-9090}:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s
+    init: true
+
   postgres:
     image: postgres:16
     container_name: financetracker-postgres

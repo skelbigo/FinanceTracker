@@ -1,7 +1,7 @@
 APP=financetracker
 DOCKER_COMPOSE?=docker compose
 
-.PHONY: up up-cache down logs test migrate migrate-down migrate-status fmt lint tidy worker
+.PHONY: up up-cache down logs test migrate migrate-down migrate-status fmt lint tidy worker notifications-grpc
 
 up:
 	$(DOCKER_COMPOSE) up --build
@@ -29,6 +29,9 @@ test:
 
 worker:
 	go run ./apps/notification-service/worker
+
+notifications-grpc:
+	go run ./apps/notification-service
 
 fmt:
 	go fmt ./...
