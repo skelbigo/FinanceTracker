@@ -70,10 +70,19 @@ func RegisterGRPC(mux *http.ServeMux, svc *Service, logger *log.Logger) {
 		}
 
 		ws := strings.TrimSpace(req.WorkspaceId)
-		typ := NotificationType(strings.TrimSpace(req.Type))
-		if typ == "" {
+
+		typStr := strings.ToLower(strings.TrimSpace(req.Type))
+
+		typ := TypeOverspending
+		switch typStr {
+		case "new_transaction":
+			typ = TypeNewTransaction
+		case "overspending", "":
+			typ = TypeOverspending
+		default:
 			typ = TypeOverspending
 		}
+
 		title := strings.TrimSpace(req.Title)
 		if title == "" {
 			title = "Notification"

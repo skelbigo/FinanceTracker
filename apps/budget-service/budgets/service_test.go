@@ -7,14 +7,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skelbigo/FinanceTracker/apps/gateway-http/workspaces"
 	"github.com/skelbigo/FinanceTracker/packages/contracts/notificationsv1"
 )
 
-type fakeMembers struct{ members []workspaces.MemberInfo }
+type fakeMembers struct{ members []MemberInfo }
 
-func (f fakeMembers) ListMembersInfo(ctx context.Context, workspaceID string) ([]workspaces.MemberInfo, error) {
-	return append([]workspaces.MemberInfo(nil), f.members...), nil
+func (f fakeMembers) ListMembers(ctx context.Context, workspaceID string) ([]MemberInfo, error) {
+	return append([]MemberInfo(nil), f.members...), nil
 }
 
 type fakeNotifClient struct {
@@ -210,10 +209,10 @@ func TestService_HandleExpenseTransaction_CallsNotificationClient_OnNewOverspend
 	other := uuid.New().String()
 	viewer := uuid.New().String()
 
-	mem := fakeMembers{members: []workspaces.MemberInfo{
-		{UserID: actor, Role: workspaces.RoleMember},
-		{UserID: other, Role: workspaces.RoleOwner},
-		{UserID: viewer, Role: workspaces.RoleViewer},
+	mem := fakeMembers{members: []MemberInfo{
+		{UserID: actor, Role: RoleMember},
+		{UserID: other, Role: RoleOwner},
+		{UserID: viewer, Role: RoleViewer},
 	}}
 
 	client := &fakeNotifClient{}

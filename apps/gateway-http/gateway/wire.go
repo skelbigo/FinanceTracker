@@ -80,7 +80,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	notifH := notifications.NewHandler(notifSvc)
 
 	notifClient := notificationsv1.NewClient(fmt.Sprintf("127.0.0.1:%d", cfg.NotificationsGRPCPort))
-	bSvc.WithNotifications(wsRepo, notifClient)
+	bSvc.WithNotifications(budgetMembersAdapter{wsRepo: wsRepo}, notifClient)
 
 	// redis (analytics cache)
 	rdb := redisx.NewClient(cfg)

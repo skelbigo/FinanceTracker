@@ -2,8 +2,16 @@ syntax = "proto3";
 
 package contracts.notifications.v1;
 
+option go_package = "github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1;notificationsv1";
+
 service NotificationService {
   rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+}
+
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  OVERSPENDING = 1;
+  NEW_TRANSACTION = 2;
 }
 
 message CreateNotificationRequest {
@@ -11,12 +19,14 @@ message CreateNotificationRequest {
 
   repeated string recipient_user_ids = 2;
 
-  string type = 3;
+  NotificationType type = 3;
 
   string title = 4;
   string body = 5;
 
   string payload_json = 6;
+
+  string dedupe_key = 7;
 }
 
 message CreateNotificationResponse {
