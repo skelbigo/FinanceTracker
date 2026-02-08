@@ -8,10 +8,10 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux \
-    go build -o /app/api ./cmd/api
+    go build -o /app/api ./apps/gateway-http
 
 RUN CGO_ENABLED=0 GOOS=linux \
-    go build -o /app/worker ./cmd/worker
+    go build -o /app/worker ./apps/notification-service/worker
 
 FROM alpine:3.20
 

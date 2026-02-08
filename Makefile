@@ -16,19 +16,19 @@ logs:
 	$(DOCKER_COMPOSE) logs -f
 
 migrate:
-	go run ./cmd/api -mode=migrate -cmd=up
+	go run ./apps/gateway-http -mode=migrate -cmd=up
 
 migrate-down:
-	go run ./cmd/api -mode=migrate -cmd=down
+	go run ./apps/gateway-http -mode=migrate -cmd=down
 
 migrate-status:
-	go run ./cmd/api -mode=migrate -cmd=status
+	go run ./apps/gateway-http -mode=migrate -cmd=status
 
 test:
 	go test ./...
 
 worker:
-	go run ./cmd/worker
+	go run ./apps/notification-service/worker
 
 fmt:
 	go fmt ./...
