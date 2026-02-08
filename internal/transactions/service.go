@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/skelbigo/FinanceTracker/internal/analytics"
-	"github.com/skelbigo/FinanceTracker/internal/notifications"
 )
 
 type BudgetHook interface {
@@ -20,12 +19,26 @@ type CategoryLookup interface {
 	ExistsInWorkspace(ctx context.Context, workspaceID, categoryID uuid.UUID) (bool, error)
 }
 
+type NewTransactionHook interface {
+	HandleNewTransaction(
+		ctx context.Context,
+		workspaceID string,
+		actorUserID string,
+		txID string,
+		amountMinor int64,
+		currency string,
+		txType string,
+		categoryID string,
+		occurredAt time.Time,
+	)
+}
+
 type Service struct {
 	repo   *Repo
 	budget BudgetHook
 	cats   CategoryLookup
 	inv    analytics.CacheIndex
-	notifs *notifications.Service
+	nx     NewTransactionHook
 }
 
 func NewService(repo *Repo, budget BudgetHook, cats CategoryLookup) *Service {
@@ -37,8 +50,8 @@ func (s *Service) WithAnalyticsCache(inv analytics.CacheIndex) *Service {
 	return s
 }
 
-func (s *Service) WithNotifications(notifs *notifications.Service) *Service {
-	s.notifs = notifs
+func (s *Service) WithNewTransactionHook(h NewTransactionHook) *Service {
+	s.nx = h
 	return s
 }
 
@@ -60,7 +73,7 @@ func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error
 
 	s.invalidateAnalyticsBestEffort(ctx, out.WorkspaceID)
 
-	s.notifyNewTransactionBestEffort(ctx, out)
+	s.newTransactionBestEffort(ctx, out)
 
 	s.budgetBestEffort(ctx, out)
 	return out, nil
@@ -161,15 +174,15 @@ func (s *Service) budgetBestEffort(ctx context.Context, tx Transaction) {
 	s.budget.HandleExpenseTransaction(ctx, tx.WorkspaceID, tx.UserID, tx.ID, catID, tx.AmountMinor, tx.Currency, tx.OccurredAt)
 }
 
-func (s *Service) notifyNewTransactionBestEffort(ctx context.Context, tx Transaction) {
-	if s.notifs == nil {
+func (s *Service) newTransactionBestEffort(ctx context.Context, tx Transaction) {
+	if s.nx == nil {
 		return
 	}
 	catID := ""
 	if tx.CategoryID != nil {
 		catID = *tx.CategoryID
 	}
-	s.notifs.NotifyNewTransaction(
+	s.nx.HandleNewTransaction(
 		ctx,
 		tx.WorkspaceID,
 		tx.UserID,

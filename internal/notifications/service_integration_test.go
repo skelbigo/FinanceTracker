@@ -70,7 +70,7 @@ func TestIntegration_NotificationService_CreateInApp_PersistsFields(t *testing.T
 	}
 
 	repo := notifications.NewRepo(pool)
-	svc := notifications.NewService(repo, nil, nil, nil, nil, notifications.Options{PublicURL: "http://localhost:8080"})
+	svc := notifications.NewService(repo, nil, nil, nil, notifications.Options{PublicURL: "http://localhost:8080"})
 
 	ws := wsID.String()
 	payload := map[string]any{"transactionId": "tx_123", "amount": int64(123)}

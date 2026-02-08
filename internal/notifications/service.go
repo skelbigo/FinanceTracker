@@ -2,17 +2,12 @@ package notifications
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
-
-type MemberLister interface {
-	ListMembersInfo(ctx context.Context, workspaceID string) ([]workspaces.MemberInfo, error)
-}
 
 type UserLookup interface {
 	GetUserEmail(ctx context.Context, userID string) (string, error)
@@ -25,21 +20,20 @@ type Options struct {
 }
 
 type Service struct {
-	repo    *Repo
-	members MemberLister
-	users   UserLookup
-	email   EmailSender
-	push    PushProvider
-	opts    Options
+	repo  *Repo
+	users UserLookup
+	email EmailSender
+	push  PushProvider
+	opts  Options
 }
 
 type NotificationService = Service
 
-func NewService(repo *Repo, members MemberLister, users UserLookup, email EmailSender, push PushProvider, opts Options) *Service {
+func NewService(repo *Repo, users UserLookup, email EmailSender, push PushProvider, opts Options) *Service {
 	if opts.PublicURL == "" {
 		opts.PublicURL = "http://localhost:8080"
 	}
-	return &Service{repo: repo, members: members, users: users, email: email, push: push, opts: opts}
+	return &Service{repo: repo, users: users, email: email, push: push, opts: opts}
 }
 
 type ListResult struct {
@@ -148,51 +142,6 @@ func (s *Service) DeletePushSubscription(ctx context.Context, userID string, end
 	return s.repo.DeletePushSubscription(ctx, uid, endpoint)
 }
 
-func (s *Service) NotifyNewTransaction(
-	ctx context.Context,
-	workspaceID string,
-	actorUserID string,
-	txID string,
-	amountMinor int64,
-	currency string,
-	txType string,
-	categoryID string,
-	occurredAt time.Time,
-) {
-	members, err := s.members.ListMembersInfo(ctx, workspaceID)
-	if err != nil {
-		log.Printf("NotifyNewTransaction: list members: %v", err)
-		return
-	}
-	if len(members) <= 1 {
-		return
-	}
-	for _, m := range members {
-		if m.UserID == actorUserID && len(members) > 1 {
-			continue
-		}
-		ws := workspaceID
-		payload := map[string]any{
-			"transactionId": txID,
-			"amount":        amountMinor,
-			"amountMinor":   amountMinor,
-			"currency":      currency,
-			"type":          txType,
-			"categoryId":    categoryID,
-			"date":          occurredAt,
-			"createdBy":     actorUserID,
-			"recipientRole": string(m.Role),
-		}
-		title := "New transaction"
-		body := fmt.Sprintf("A new transaction was added (%s %d)", currency, amountMinor)
-		_, err := s.CreateInApp(ctx, m.UserID, &ws, TypeNewTransaction, title, body, payload)
-		if err != nil {
-			log.Printf("NotifyNewTransaction: create notif: %v", err)
-			continue
-		}
-	}
-}
-
 func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 	if s.push != nil {
 		err := s.push.Send(n.UserID.String(), map[string]any{"notification_id": n.ID.String(), "type": n.Type})
@@ -213,7 +162,7 @@ func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 		}
 	case TypeNewTransaction:
 		if s.opts.EmailNotifyNewTransaction {
-			if role, ok := n.Payload["recipientRole"].(string); ok && role == string(workspaces.RoleOwner) {
+			if role, ok := n.Payload["recipientRole"].(string); ok && strings.EqualFold(strings.TrimSpace(role), "owner") {
 				s.bestEffortEmail(ctx, n, "")
 			}
 		}

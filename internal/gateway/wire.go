@@ -72,7 +72,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		emailSender = nil
 	}
 	pushSender := notifications.NoopPushProvider{}
-	notifSvc := notifications.NewService(notifRepo, wsRepo, usersAdapter, emailSender, pushSender, notifications.Options{
+	notifSvc := notifications.NewService(notifRepo, usersAdapter, emailSender, pushSender, notifications.Options{
 		PublicURL:                 cfg.AppPublicURL,
 		EmailNotifyOverspending:   cfg.EmailNotifyOverspending,
 		EmailNotifyNewTransaction: cfg.EmailNotifyNewTransaction,
@@ -80,13 +80,15 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	notifH := notifications.NewHandler(notifSvc, authMW)
 
 	notifClient := notificationsv1.NewClient(fmt.Sprintf("127.0.0.1:%d", cfg.NotificationsGRPCPort))
-	bSvc.WithNotifications(wsRepo, notifClient)
+	bSvc.WithNotifications(budgetMembersAdapter{wsRepo: wsRepo}, notifClient)
 
 	// redis (analytics cache)
 	rdb := redisx.NewClient(cfg)
 	aCacheIndex := analytics.NewCacheIndex(rdb)
 
-	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).WithAnalyticsCache(aCacheIndex).WithNotifications(notifSvc)
+	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).
+		WithAnalyticsCache(aCacheIndex).
+		WithNewTransactionHook(newTransactionHook{wsRepo: wsRepo, notifs: notifSvc})
 	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
 
 	// analytics

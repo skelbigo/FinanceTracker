@@ -12,8 +12,20 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1"
-	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
+
+type Role string
+
+const (
+	RoleOwner  Role = "owner"
+	RoleMember Role = "member"
+	RoleViewer Role = "viewer"
+)
+
+type MemberInfo struct {
+	UserID string
+	Role   Role
+}
 
 type BudgetRepo interface {
 	InsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error)
@@ -31,7 +43,7 @@ type SpentReader interface {
 }
 
 type MemberLister interface {
-	ListMembersInfo(ctx context.Context, workspaceID string) ([]workspaces.MemberInfo, error)
+	ListMembers(ctx context.Context, workspaceID string) ([]MemberInfo, error)
 }
 
 type NotificationClient interface {
@@ -249,7 +261,7 @@ func (s *Service) HandleExpenseTransaction(ctx context.Context, workspaceID, act
 		return
 	}
 
-	members, err := s.members.ListMembersInfo(ctx, workspaceID)
+	members, err := s.members.ListMembers(ctx, workspaceID)
 	if err != nil {
 		log.Printf("budget members list: %v", err)
 		return
@@ -257,7 +269,7 @@ func (s *Service) HandleExpenseTransaction(ctx context.Context, workspaceID, act
 
 	recipients := make([]string, 0, len(members))
 	for _, m := range members {
-		if m.Role != workspaces.RoleOwner && m.Role != workspaces.RoleMember {
+		if m.Role != RoleOwner && m.Role != RoleMember {
 			continue
 		}
 		if m.UserID == actorUserID {

@@ -31,7 +31,7 @@ func projectRoot() string {
 func testAuthFromHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if uid := c.GetHeader("X-Test-User"); uid != "" {
-			c.Set(identity.CtxUserIDKey, uid)
+			c.Set(auth.CtxUserIDKey, uid)
 		}
 		c.Next()
 	}
@@ -98,7 +98,7 @@ func TestIntegration_NotificationsRBAC_PrivateByUserID(t *testing.T) {
 	r := gin.New()
 
 	repo := notifications.NewRepo(pool)
-	svc := notifications.NewService(repo, nil, nil, nil, notifications.NoopPushSender{}, notifications.Options{})
+	svc := notifications.NewService(repo, nil, nil, notifications.NoopPushSender{}, notifications.Options{})
 	h := notifications.NewHandler(svc, testAuthFromHeader())
 	h.RegisterRoutes(r)
 

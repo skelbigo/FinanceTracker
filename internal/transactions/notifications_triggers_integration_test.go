@@ -25,6 +25,64 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+type budgetMembersAdapter struct {
+	wsRepo *workspaces.Repo
+}
+
+func (a budgetMembersAdapter) ListMembers(ctx context.Context, workspaceID string) ([]budgets.MemberInfo, error) {
+	items, err := a.wsRepo.ListMembersInfo(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]budgets.MemberInfo, 0, len(items))
+	for _, m := range items {
+		out = append(out, budgets.MemberInfo{UserID: m.UserID, Role: budgets.Role(m.Role)})
+	}
+	return out, nil
+}
+
+type newTxHook struct {
+	wsRepo *workspaces.Repo
+	nSvc   *notifications.Service
+}
+
+func (h newTxHook) HandleNewTransaction(
+	ctx context.Context,
+	workspaceID string,
+	actorUserID string,
+	txID string,
+	amountMinor int64,
+	currency string,
+	txType string,
+	categoryID string,
+	occurredAt time.Time,
+) {
+	if h.wsRepo == nil || h.nSvc == nil {
+		return
+	}
+	members, err := h.wsRepo.ListMembersInfo(ctx, workspaceID)
+	if err != nil {
+		return
+	}
+	for _, m := range members {
+		if m.UserID == actorUserID {
+			continue
+		}
+		ws := workspaceID
+		payload := map[string]any{
+			"transactionId": txID,
+			"amount":        amountMinor,
+			"amountMinor":   amountMinor,
+			"currency":      currency,
+			"type":          txType,
+			"categoryId":    categoryID,
+			"date":          occurredAt,
+			"createdBy":     actorUserID,
+			"recipientRole": string(m.Role),
+		}
+		_, _ = h.nSvc.CreateInApp(ctx, m.UserID, &ws, notifications.TypeNewTransaction, "New transaction", "", payload)
+	}
+}
 func integrationDSN(t *testing.T) string {
 	t.Helper()
 	if v := os.Getenv("FT_TEST_DB_URL"); v != "" {
@@ -113,10 +171,10 @@ func TestIntegration_TriggerNewTransaction_NotifiesMembersExceptAuthor(t *testin
 
 	wsRepo := workspaces.NewRepo(pool)
 	nRepo := notifications.NewRepo(pool)
-	nSvc := notifications.NewService(nRepo, wsRepo, nil, nil, nil, notifications.Options{})
+	nSvc := notifications.NewService(nRepo, nil, nil, nil, notifications.Options{})
 
 	tRepo := NewRepo(pool)
-	tSvc := NewService(tRepo, nil, nil).WithNotifications(nSvc)
+	tSvc := NewService(tRepo, nil, nil).WithNewTransactionHook(newTxHook{wsRepo: wsRepo, nSvc: nSvc})
 
 	occurred := time.Date(2026, time.February, 4, 12, 0, 0, 0, time.UTC)
 	created, err := tSvc.Create(ctx, Transaction{
@@ -205,7 +263,7 @@ func TestIntegration_TriggerOverspending_NotifiesOnceAndNoSpam(t *testing.T) {
 
 	wsRepo := workspaces.NewRepo(pool)
 	nRepo := notifications.NewRepo(pool)
-	nSvc := notifications.NewService(nRepo, wsRepo, nil, nil, nil, notifications.Options{})
+	nSvc := notifications.NewService(nRepo, nil, nil, nil, notifications.Options{})
 
 	bRepo := budgets.NewRepo(pool)
 	tRepo := NewRepo(pool)
@@ -228,9 +286,9 @@ func TestIntegration_TriggerOverspending_NotifiesOnceAndNoSpam(t *testing.T) {
 	})
 
 	nClient := notificationsv1.NewClient(grpcAddr)
-	bSvc.WithNotifications(wsRepo, nClient)
+	bSvc.WithNotifications(budgetMembersAdapter{wsRepo: wsRepo}, nClient)
 
-	tSvc := NewService(tRepo, bSvc, txCatLookup).WithNotifications(nSvc)
+	tSvc := NewService(tRepo, bSvc, txCatLookup)
 
 	occ1 := time.Date(2026, time.February, 4, 12, 0, 0, 0, time.UTC)
 	catStr := catID.String()
