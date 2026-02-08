@@ -192,7 +192,7 @@ func (s *Service) notifyNewTransactionBestEffort(ctx context.Context, tx Transac
 		tx.ID,
 		tx.AmountMinor,
 		tx.Currency,
-		tx.Type,
+		string(tx.Type),
 		catID,
 		tx.OccurredAt,
 	)

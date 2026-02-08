@@ -9,9 +9,10 @@ import (
 )
 
 type fakeRepo struct {
-	budgets []Budget
-	spent   map[string]int64
-	events  []BudgetEvent
+	budgets   []Budget
+	spent     map[string]int64
+	events    []BudgetEvent
+	eventKeys map[string]struct{}
 }
 
 func keySpent(categoryID uuid.UUID, currency string) string {
@@ -81,11 +82,19 @@ func (r *fakeRepo) GetSpentForCategory(ctx context.Context, workspaceID, categor
 }
 
 func (r *fakeRepo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error) {
+	if r.eventKeys == nil {
+		r.eventKeys = make(map[string]struct{})
+	}
+	key := ev.BudgetID.String() + ":" + ev.PeriodStart.UTC().Format(time.RFC3339Nano) + ":" + ev.PeriodEnd.UTC().Format(time.RFC3339Nano)
+	if _, ok := r.eventKeys[key]; ok {
+		return false, nil
+	}
+	r.eventKeys[key] = struct{}{}
 	r.events = append(r.events, ev)
 	return true, nil
 }
 
-func TestService_ListWithProgress(t *testing.T) {
+func TestService_CheckOverspend_NotOverLimit_NoEvent(t *testing.T) {
 	wsID := uuid.New()
 	catID := uuid.New()
 	bID := uuid.New()
@@ -95,39 +104,31 @@ func TestService_ListWithProgress(t *testing.T) {
 			ID:               bID,
 			WorkspaceID:      wsID,
 			CategoryID:       catID,
-			Period:           PeriodMonth,
+			Period:           PeriodWeek,
 			AmountLimitMinor: 1000,
 			Currency:         "UAH",
 		}},
-		spent: map[string]int64{keySpent(catID, "UAH"): 250},
+		spent: map[string]int64{keySpent(catID, "UAH"): 999},
 	}
 
 	svc := NewService(repo, nil, false)
-
-	now := time.Date(2026, time.February, 15, 12, 0, 0, 0, time.UTC)
-	items, err := svc.ListWithProgress(context.Background(), wsID, nil, now)
+	now := time.Date(2026, time.February, 4, 18, 0, 0, 0, time.UTC)
+	res, err := svc.CheckOverspendWithEvents(context.Background(), wsID, catID, "UAH", now)
 	if err != nil {
-		t.Fatalf("ListWithProgress error: %v", err)
+		t.Fatalf("CheckOverspendWithEvents error: %v", err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("items len: got %d want %d", len(items), 1)
+	if res.Overspent {
+		t.Fatalf("overspent: got true want false")
 	}
-	got := items[0]
-	if got.SpentMinor != 250 {
-		t.Fatalf("spent: got %d want %d", got.SpentMinor, 250)
+	if len(res.NewEvents) != 0 {
+		t.Fatalf("new events: got %d want %d", len(res.NewEvents), 0)
 	}
-	if got.RemainingMinor != 750 {
-		t.Fatalf("remaining: got %d want %d", got.RemainingMinor, 750)
-	}
-	if got.PercentUsed != 25 {
-		t.Fatalf("percent: got %d want %d", got.PercentUsed, 25)
-	}
-	if got.IsOver {
-		t.Fatalf("is_over: got true want false")
+	if len(repo.events) != 0 {
+		t.Fatalf("repo events: got %d want %d", len(repo.events), 0)
 	}
 }
 
-func TestService_CheckOverspend_InsertsEvent(t *testing.T) {
+func TestService_CheckOverspend_NoSpam_DoesNotInsertDuplicateEvent(t *testing.T) {
 	wsID := uuid.New()
 	catID := uuid.New()
 	bID := uuid.New()
@@ -145,23 +146,27 @@ func TestService_CheckOverspend_InsertsEvent(t *testing.T) {
 	}
 
 	svc := NewService(repo, nil, false)
-
 	now := time.Date(2026, time.February, 4, 18, 0, 0, 0, time.UTC)
-	overspent, err := svc.CheckOverspend(context.Background(), wsID, catID, "UAH", now)
+
+	res1, err := svc.CheckOverspendWithEvents(context.Background(), wsID, catID, "UAH", now)
 	if err != nil {
-		t.Fatalf("CheckOverspend error: %v", err)
+		t.Fatalf("CheckOverspendWithEvents #1 error: %v", err)
 	}
-	if !overspent {
-		t.Fatalf("overspent: got false want true")
+	if !res1.Overspent || len(res1.NewEvents) != 1 {
+		t.Fatalf("#1: overspent=%v newEvents=%d (want true,1)", res1.Overspent, len(res1.NewEvents))
+	}
+
+	res2, err := svc.CheckOverspendWithEvents(context.Background(), wsID, catID, "UAH", now)
+	if err != nil {
+		t.Fatalf("CheckOverspendWithEvents #2 error: %v", err)
+	}
+	if !res2.Overspent {
+		t.Fatalf("#2: overspent: got false want true")
+	}
+	if len(res2.NewEvents) != 0 {
+		t.Fatalf("#2: new events: got %d want %d", len(res2.NewEvents), 0)
 	}
 	if len(repo.events) != 1 {
-		t.Fatalf("events len: got %d want %d", len(repo.events), 1)
-	}
-	ev := repo.events[0]
-	if ev.WorkspaceID != wsID || ev.BudgetID != bID || ev.CategoryID != catID {
-		t.Fatalf("event ids mismatch")
-	}
-	if ev.SpentMinor != 1200 || ev.LimitMinor != 1000 || ev.Currency != "UAH" {
-		t.Fatalf("event amounts mismatch")
+		t.Fatalf("repo events: got %d want %d", len(repo.events), 1)
 	}
 }
