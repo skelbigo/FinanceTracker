@@ -312,6 +312,10 @@ func (h *Handlers) GetTransactionEdit(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "workspace not set")
 		return
 	}
+	if c.GetHeader("HX-Request") == "" {
+		c.Redirect(http.StatusSeeOther, "/app/transactions")
+		return
+	}
 
 	txID := strings.TrimSpace(c.Param("id"))
 	if txID == "" {

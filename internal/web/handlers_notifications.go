@@ -182,7 +182,7 @@ func (h *Handlers) GetNotificationGoto(c *gin.Context) {
 	case "new_transaction":
 		if raw, ok := n.Payload["transactionId"]; ok {
 			if txID, ok := raw.(string); ok && txID != "" {
-				dest = "/app/transactions/" + txID + "/edit"
+				dest = "/app/transactions"
 			} else {
 				dest = "/app/transactions"
 			}

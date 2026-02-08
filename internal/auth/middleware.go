@@ -1,18 +1,29 @@
 package auth
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
-	"strings"
 )
 
-const CtxUserIDKey = "user_id"
+const (
+	CtxUserIDKey      = "user_id"
+	accessTokenCookie = "access_token" // same as web.AccessCookie, but hardcoded to avoid cycles
+)
 
 func AuthRequired(jwtm *JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr, ok := bearerToken(c.GetHeader("Authorization"))
-		if !ok {
-			httpx.Unauthorized(c, "invalid authorization")
+		tokenStr, _ := bearerToken(c.GetHeader("Authorization"))
+
+		if tokenStr == "" {
+			if ck, err := c.Cookie(accessTokenCookie); err == nil && ck != "" {
+				tokenStr = ck
+			}
+		}
+
+		if tokenStr == "" {
+			httpx.Unauthorized(c, "missing authorization")
 			c.Abort()
 			return
 		}
