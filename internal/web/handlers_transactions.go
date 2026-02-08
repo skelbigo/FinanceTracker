@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
@@ -264,7 +264,7 @@ func (h *Handlers) PostCreateTransaction(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString(auth.CtxUserIDKey)
+	userID := c.GetString(identity.CtxUserIDKey)
 	if userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
 		return

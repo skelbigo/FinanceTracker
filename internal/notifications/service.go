@@ -7,9 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/skelbigo/FinanceTracker/internal/auth"
-	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
 
@@ -18,7 +15,7 @@ type MemberLister interface {
 }
 
 type UserLookup interface {
-	GetUserByID(ctx context.Context, userID string) (auth.User, error)
+	GetUserEmail(ctx context.Context, userID string) (string, error)
 }
 
 type Options struct {
@@ -196,54 +193,6 @@ func (s *Service) NotifyNewTransaction(
 	}
 }
 
-func (s *Service) NotifyOverspending(
-	ctx context.Context,
-	workspaceID string,
-	actorUserID string,
-	triggerTxID string,
-	triggerAmountMinor int64,
-	triggerCurrency string,
-	triggerOccurredAt time.Time,
-	ev budgets.BudgetEvent,
-) {
-	members, err := s.members.ListMembersInfo(ctx, workspaceID)
-	if err != nil {
-		log.Printf("NotifyOverspending: list members: %v", err)
-		return
-	}
-	for _, m := range members {
-		if m.Role != workspaces.RoleOwner && m.Role != workspaces.RoleMember {
-			continue
-		}
-
-		if m.UserID == actorUserID && len(members) > 1 {
-			continue
-		}
-		ws := workspaceID
-		payload := map[string]any{
-			"trigger_transaction_id": triggerTxID,
-			"trigger_amount_minor":   triggerAmountMinor,
-			"trigger_currency":       triggerCurrency,
-			"trigger_occurred_at":    triggerOccurredAt,
-			"trigger_user_id":        actorUserID,
-			"budget_id":              ev.BudgetID,
-			"category_id":            ev.CategoryID,
-			"period_start":           ev.PeriodStart,
-			"period_end":             ev.PeriodEnd,
-			"spent_minor":            ev.SpentMinor,
-			"limit_minor":            ev.LimitMinor,
-			"currency":               ev.Currency,
-		}
-		title := "Budget overspent"
-		body := fmt.Sprintf("Spent %s %d over limit %d", ev.Currency, ev.SpentMinor, ev.LimitMinor)
-		_, err := s.CreateInApp(ctx, m.UserID, &ws, TypeOverspending, title, body, payload)
-		if err != nil {
-			log.Printf("NotifyOverspending: create notif: %v", err)
-			continue
-		}
-	}
-}
-
 func (s *Service) bestEffortDeliver(ctx context.Context, n Notification) {
 	if s.push != nil {
 		err := s.push.Send(n.UserID.String(), map[string]any{"notification_id": n.ID.String(), "type": n.Type})
@@ -275,5 +224,10 @@ func (s *Service) bestEffortEmail(ctx context.Context, n Notification, toEmail s
 	if s.email == nil || !s.email.Enabled() {
 		return
 	}
-	_ = s.repo.EnsureDelivery(ctx, n.ID, ChannelEmail, StatusPending)
+	if toEmail == "" && s.users != nil {
+		if email, err := s.users.GetUserEmail(ctx, n.UserID.String()); err == nil {
+			toEmail = email
+		}
+	}
+	_ = s.repo.EnsureEmailDelivery(ctx, n.ID, toEmail)
 }

@@ -2,14 +2,13 @@ package workspaces
 
 import (
 	"context"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 )
 
 type fakeRoleRepo struct {
@@ -28,7 +27,7 @@ func (r *fakeRoleRepo) WorkspaceExists(ctx context.Context, workspaceID string) 
 func testAuthMW() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if uid := c.GetHeader("X-User-ID"); uid != "" {
-			c.Set(auth.CtxUserIDKey, uid)
+			c.Set(identity.CtxUserIDKey, uid)
 		}
 		c.Next()
 	}

@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"log"
 	"net/http"
 )
@@ -114,7 +115,7 @@ func (h *Handler) logout(c *gin.Context) {
 }
 
 func (h *Handler) me(c *gin.Context) {
-	v, ok := c.Get(CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, ok := v.(string)
 	if !ok || userID == "" {
 		httpx.Unauthorized(c, "invalid token")

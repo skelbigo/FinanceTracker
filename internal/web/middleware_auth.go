@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 )
 
 func RequireAuth(
@@ -19,7 +20,7 @@ func RequireAuth(
 		if err == nil && access != "" {
 			userID, verr := jwtm.Verify(access)
 			if verr == nil {
-				c.Set(auth.CtxUserIDKey, userID)
+				c.Set(identity.CtxUserIDKey, userID)
 				c.Next()
 				return
 			}
@@ -58,7 +59,7 @@ func RequireAuth(
 			return
 		}
 
-		c.Set(auth.CtxUserIDKey, userID)
+		c.Set(identity.CtxUserIDKey, userID)
 		c.Next()
 	}
 }

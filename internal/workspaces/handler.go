@@ -4,8 +4,8 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"net/http"
 	"strings"
 )
@@ -56,7 +56,7 @@ type updateMemberRoleReq struct {
 }
 
 func userIDFromCtx(c *gin.Context) (string, bool) {
-	v, exists := c.Get(auth.CtxUserIDKey)
+	v, exists := c.Get(identity.CtxUserIDKey)
 	id, ok := v.(string)
 	return id, exists && ok && id != ""
 }

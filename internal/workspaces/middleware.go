@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 )
 
 const (
@@ -64,7 +64,7 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 			return
 		}
 
-		v, exists := c.Get(auth.CtxUserIDKey)
+		v, exists := c.Get(identity.CtxUserIDKey)
 		userID, ok := v.(string)
 		if !exists || !ok || userID == "" {
 			httpx.Unauthorized(c, "invalid token")
@@ -118,7 +118,6 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 		actual := Role(roleStr)
 		switch actual {
 		case RoleViewer, RoleMember, RoleOwner:
-			// valid role from DB
 		default:
 			httpx.Internal(c)
 			c.Abort()

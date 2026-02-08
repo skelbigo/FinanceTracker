@@ -208,6 +208,18 @@ ON CONFLICT (notification_id, channel) DO NOTHING;
 	return err
 }
 
+func (r *Repo) EnsureEmailDelivery(ctx context.Context, notificationID uuid.UUID, toEmail string) error {
+	const q = `
+INSERT INTO notification_delivery (notification_id, channel, status, to_email)
+VALUES ($1::uuid, 'email', $2, NULLIF($3, ''))
+ON CONFLICT (notification_id, channel) DO UPDATE
+SET to_email = COALESCE(notification_delivery.to_email, EXCLUDED.to_email),
+    updated_at = now();
+`
+	_, err := r.pool.Exec(ctx, q, notificationID, string(StatusPending), toEmail)
+	return err
+}
+
 type EmailDeliveryJob struct {
 	DeliveryID uuid.UUID
 	ToEmail    string
@@ -233,11 +245,10 @@ func (r *Repo) ClaimPendingEmailDeliveries(ctx context.Context, batchSize int, m
 
 	const q = `
 SELECT d.id,
-       u.email,
+       d.to_email,
        n.id, n.user_id, n.workspace_id, n.type, n.title, n.body, n.payload, n.is_read, n.created_at
 FROM notification_delivery d
 JOIN notifications n ON n.id = d.notification_id
-JOIN users u ON u.id = n.user_id
 WHERE d.channel = 'email'
   AND d.attempts < $1
   AND (

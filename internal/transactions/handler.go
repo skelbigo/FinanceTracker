@@ -5,8 +5,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 	"log"
 	"net/http"
@@ -58,7 +58,7 @@ type updateTxReq struct {
 }
 
 func UserIDFromCtx(c *gin.Context) (string, bool) {
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	id, ok2 := v.(string)
 	return id, ok && ok2 && id != ""
 }

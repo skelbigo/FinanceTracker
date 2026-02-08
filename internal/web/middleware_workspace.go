@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
 
@@ -20,7 +20,7 @@ func (h *Handlers) RequireWorkspace() gin.HandlerFunc {
 			return
 		}
 
-		v, ok := c.Get(auth.CtxUserIDKey)
+		v, ok := c.Get(identity.CtxUserIDKey)
 		userID, _ := v.(string)
 		if !ok || userID == "" {
 			c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")

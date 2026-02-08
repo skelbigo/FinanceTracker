@@ -34,11 +34,12 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	// auth
 	authRepo := auth.NewRepo(pool)
+	usersAdapter := NewAuthUsersAdapter(authRepo)
 	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL, resetTTL, returnResetToken)
 	authH := auth.NewHandler(authSvc, authMW)
 
 	// workspaces
-	wsSvc := workspaces.NewService(wsRepo)
+	wsSvc := workspaces.NewService(wsRepo, usersAdapter)
 	wsH := workspaces.NewHandler(wsSvc, authMW, wsRepo)
 
 	// categories
@@ -71,7 +72,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		emailSender = nil
 	}
 	pushSender := notifications.NoopPushProvider{}
-	notifSvc := notifications.NewService(notifRepo, wsRepo, authRepo, emailSender, pushSender, notifications.Options{
+	notifSvc := notifications.NewService(notifRepo, wsRepo, usersAdapter, emailSender, pushSender, notifications.Options{
 		PublicURL:                 cfg.AppPublicURL,
 		EmailNotifyOverspending:   cfg.EmailNotifyOverspending,
 		EmailNotifyNewTransaction: cfg.EmailNotifyNewTransaction,

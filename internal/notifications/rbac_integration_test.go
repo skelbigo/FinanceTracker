@@ -31,7 +31,7 @@ func projectRoot() string {
 func testAuthFromHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if uid := c.GetHeader("X-Test-User"); uid != "" {
-			c.Set(auth.CtxUserIDKey, uid)
+			c.Set(identity.CtxUserIDKey, uid)
 		}
 		c.Next()
 	}

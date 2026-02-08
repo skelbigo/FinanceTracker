@@ -6,11 +6,22 @@ import (
 )
 
 type Service struct {
-	repo *Repo
+	repo  *Repo
+	users UserDirectory
 }
 
-func NewService(repo *Repo) *Service {
-	return &Service{repo: repo}
+type UserDirectory interface {
+	FindUserIDByEmail(ctx context.Context, email string) (string, error)
+	GetUserPublicByID(ctx context.Context, userID string) (UserPublic, error)
+}
+
+type UserPublic struct {
+	Email string
+	Name  *string
+}
+
+func NewService(repo *Repo, users UserDirectory) *Service {
+	return &Service{repo: repo, users: users}
 }
 
 func (s *Service) CreateWorkspace(ctx context.Context, creatorID, name, currency string) (Workspace, Role, error) {
@@ -33,7 +44,21 @@ func (s *Service) GetWorkspace(ctx context.Context, workspaceID, userID string) 
 }
 
 func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]MemberInfo, error) {
-	return s.repo.ListMembersInfo(ctx, workspaceID)
+	members, err := s.repo.ListMembersInfo(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if s.users == nil {
+		return members, nil
+	}
+	for i := range members {
+		u, err := s.users.GetUserPublicByID(ctx, members[i].UserID)
+		if err == nil {
+			members[i].Email = u.Email
+			members[i].Name = u.Name
+		}
+	}
+	return members, nil
 }
 
 func (s *Service) AddMemberByEmail(ctx context.Context, workspaceID, email string, role Role) error {
@@ -43,7 +68,11 @@ func (s *Service) AddMemberByEmail(ctx context.Context, workspaceID, email strin
 		return ErrInvalidRole
 	}
 
-	userID, err := s.repo.FindUserIDByEmail(ctx, email)
+	if s.users == nil {
+		return ErrUserNotFound
+	}
+
+	userID, err := s.users.FindUserIDByEmail(ctx, email)
 	if err != nil {
 		return err
 	}

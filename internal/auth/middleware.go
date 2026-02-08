@@ -5,11 +5,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/skelbigo/FinanceTracker/internal/httpx"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 )
 
 const (
-	CtxUserIDKey      = "user_id"
-	accessTokenCookie = "access_token" // same as web.AccessCookie, but hardcoded to avoid cycles
+	accessTokenCookie = "access_token"
 )
 
 func AuthRequired(jwtm *JWTManager) gin.HandlerFunc {
@@ -35,7 +35,7 @@ func AuthRequired(jwtm *JWTManager) gin.HandlerFunc {
 			return
 		}
 
-		c.Set(CtxUserIDKey, userID)
+		c.Set(identity.CtxUserIDKey, userID)
 		c.Next()
 	}
 }

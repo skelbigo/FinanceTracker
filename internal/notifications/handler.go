@@ -5,8 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 )
 
 type Handler struct {
@@ -33,7 +32,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 }
 
 func userIDFromCtx(c *gin.Context) (string, bool) {
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	if !ok {
 		return "", false
 	}

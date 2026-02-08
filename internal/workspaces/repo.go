@@ -123,9 +123,8 @@ AND wm.user_id = $2::uuid
 
 func (r *Repo) ListMembersInfo(ctx context.Context, workspaceID string) ([]MemberInfo, error) {
 	const q = `
-SELECT wm.user_id::text, u.email, u.name, wm.role, wm.created_at
+SELECT wm.user_id::text, wm.role, wm.created_at
 FROM workspaces_members wm
-JOIN users u on u.id = wm.user_id
 WHERE wm.workspace_id = $1::uuid
 ORDER BY wm.created_at ASC
 `
@@ -139,27 +138,13 @@ ORDER BY wm.created_at ASC
 	for rows.Next() {
 		var m MemberInfo
 		var role string
-		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &role, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.UserID, &role, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		m.Role = Role(role)
 		out = append(out, m)
 	}
 	return out, rows.Err()
-}
-
-func (r *Repo) FindUserIDByEmail(ctx context.Context, email string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	const q = `SELECT id::text FROM users WHERE email = $1`
-	var id string
-	err := r.pool.QueryRow(ctx, q, email).Scan(&id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", ErrUserNotFound
-		}
-		return "", err
-	}
-	return id, nil
 }
 
 func (r *Repo) AddMemberByUserID(ctx context.Context, workspaceID, userID string, role Role) error {

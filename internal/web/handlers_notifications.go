@@ -1,13 +1,12 @@
 package web
 
 import (
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/skelbigo/FinanceTracker/internal/auth"
 )
 
 type notificationVM struct {
@@ -27,7 +26,7 @@ func (h *Handlers) GetNotificationsPage(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -110,7 +109,7 @@ func (h *Handlers) PostNotificationRead(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -133,7 +132,7 @@ func (h *Handlers) PostNotificationsReadAll(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -154,7 +153,7 @@ func (h *Handlers) GetNotificationGoto(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")

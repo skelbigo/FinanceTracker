@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/skelbigo/FinanceTracker/internal/auth"
+	"github.com/skelbigo/FinanceTracker/internal/identity"
 )
 
 func (h *Handlers) GetWorkspacesPage(c *gin.Context) {
@@ -18,7 +18,7 @@ func (h *Handlers) GetWorkspacesPage(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -49,7 +49,7 @@ func (h *Handlers) PostCreateWorkspace(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
@@ -84,7 +84,7 @@ func (h *Handlers) PostSelectWorkspace(c *gin.Context) {
 		return
 	}
 
-	v, ok := c.Get(auth.CtxUserIDKey)
+	v, ok := c.Get(identity.CtxUserIDKey)
 	userID, _ := v.(string)
 	if !ok || userID == "" {
 		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
