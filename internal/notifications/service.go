@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,18 +28,12 @@ type Options struct {
 }
 
 type Service struct {
-	repo       *Repo
-	members    MemberLister
-	users      UserLookup
-	email      EmailSender
-	push       PushProvider
-	opts       Options
-	emailQueue chan emailJob
-}
-
-type emailJob struct {
-	n  Notification
-	to string
+	repo    *Repo
+	members MemberLister
+	users   UserLookup
+	email   EmailSender
+	push    PushProvider
+	opts    Options
 }
 
 type NotificationService = Service
@@ -49,56 +42,7 @@ func NewService(repo *Repo, members MemberLister, users UserLookup, email EmailS
 	if opts.PublicURL == "" {
 		opts.PublicURL = "http://localhost:8080"
 	}
-	svc := &Service{repo: repo, members: members, users: users, email: email, push: push, opts: opts}
-	svc.initEmailQueue()
-	return svc
-}
-
-const defaultEmailQueueSize = 128
-
-func (s *Service) initEmailQueue() {
-	if s.email == nil || !s.email.Enabled() {
-		return
-	}
-	if s.emailQueue != nil {
-		return
-	}
-	s.emailQueue = make(chan emailJob, defaultEmailQueueSize)
-	go s.runEmailWorker()
-}
-
-func (s *Service) runEmailWorker() {
-	for job := range s.emailQueue {
-		s.processEmailJob(job)
-	}
-}
-
-func (s *Service) processEmailJob(job emailJob) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("email worker panic: %v\n%s", r, string(debug.Stack()))
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	subject, html, err := renderNotificationEmail(job.n, s.opts.PublicURL)
-	if err != nil {
-		log.Printf("email render: %v", err)
-		return
-	}
-
-	err = s.email.Send(job.to, subject, html)
-	if err != nil {
-		errTxt := err.Error()
-		_ = s.repo.InsertDelivery(ctx, job.n.ID, ChannelEmail, StatusFailed, &errTxt, 1, nil)
-		log.Printf("email send: %v", err)
-		return
-	}
-
-	now := time.Now()
-	_ = s.repo.InsertDelivery(ctx, job.n.ID, ChannelEmail, StatusSent, nil, 1, &now)
+	return &Service{repo: repo, members: members, users: users, email: email, push: push, opts: opts}
 }
 
 type ListResult struct {
@@ -319,29 +263,5 @@ func (s *Service) bestEffortEmail(ctx context.Context, n Notification, toEmail s
 	if s.email == nil || !s.email.Enabled() {
 		return
 	}
-	if toEmail == "" && s.users != nil {
-		u, err := s.users.GetUserByID(ctx, n.UserID.String())
-		if err == nil {
-			toEmail = u.Email
-		}
-	}
-	if toEmail == "" {
-		return
-	}
-
-	_ = s.repo.InsertDelivery(ctx, n.ID, ChannelEmail, StatusPending, nil, 0, nil)
-
-	if s.emailQueue != nil {
-		select {
-		case s.emailQueue <- emailJob{n: n, to: toEmail}:
-			return
-		default:
-			errTxt := "email queue is full"
-			_ = s.repo.InsertDelivery(ctx, n.ID, ChannelEmail, StatusFailed, &errTxt, 1, nil)
-			log.Printf("email enqueue: %s", errTxt)
-			return
-		}
-	}
-
-	s.processEmailJob(emailJob{n: n, to: toEmail})
+	_ = s.repo.EnsureDelivery(ctx, n.ID, ChannelEmail, StatusPending)
 }

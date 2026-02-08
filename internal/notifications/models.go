@@ -36,9 +36,10 @@ const (
 type DeliveryStatus string
 
 const (
-	StatusPending DeliveryStatus = "pending"
-	StatusSent    DeliveryStatus = "sent"
-	StatusFailed  DeliveryStatus = "failed"
+	StatusPending    DeliveryStatus = "pending"
+	StatusProcessing DeliveryStatus = "processing"
+	StatusSent       DeliveryStatus = "sent"
+	StatusFailed     DeliveryStatus = "failed"
 )
 
 type Delivery struct {

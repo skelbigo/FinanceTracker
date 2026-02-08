@@ -1,7 +1,7 @@
 APP=financetracker
 DOCKER_COMPOSE?=docker compose
 
-.PHONY: up up-cache down logs test migrate migrate-down migrate-status fmt lint tidy
+.PHONY: up up-cache down logs test migrate migrate-down migrate-status fmt lint tidy worker
 
 up:
 	$(DOCKER_COMPOSE) up --build
@@ -26,6 +26,9 @@ migrate-status:
 
 test:
 	go test ./...
+
+worker:
+	go run ./cmd/worker
 
 fmt:
 	go fmt ./...

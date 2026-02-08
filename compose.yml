@@ -22,6 +22,27 @@ services:
     stop_grace_period: 15s
     init: true
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financetracker-worker
+    env_file: .env
+    volumes:
+      - ./.env:/app/.env:ro
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      GIN_MODE: release
+    command: ["/app/worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s
+    init: true
+
   postgres:
     image: postgres:16
     container_name: financetracker-postgres

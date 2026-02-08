@@ -161,9 +161,124 @@ SET
 	status = EXCLUDED.status,
 	error = EXCLUDED.error,
 	attempts = notification_delivery.attempts + EXCLUDED.attempts,
-	sent_at = EXCLUDED.sent_at;
+	sent_at = EXCLUDED.sent_at,
+	updated_at = now();
 `
 	_, err := r.pool.Exec(ctx, q, notificationID, string(channel), string(status), errText, attempts, sentAt)
+	return err
+}
+
+func (r *Repo) EnsureDelivery(ctx context.Context, notificationID uuid.UUID, channel DeliveryChannel, status DeliveryStatus) error {
+	const q = `
+INSERT INTO notification_delivery (notification_id, channel, status)
+VALUES ($1::uuid, $2, $3)
+ON CONFLICT (notification_id, channel) DO NOTHING;
+`
+	_, err := r.pool.Exec(ctx, q, notificationID, string(channel), string(status))
+	return err
+}
+
+type EmailDeliveryJob struct {
+	DeliveryID uuid.UUID
+	ToEmail    string
+	Notif      Notification
+}
+
+func (r *Repo) ClaimPendingEmailDeliveries(ctx context.Context, batchSize int, maxAttempts int) ([]EmailDeliveryJob, error) {
+	if batchSize <= 0 {
+		batchSize = 20
+	}
+	if batchSize > 200 {
+		batchSize = 200
+	}
+	if maxAttempts <= 0 {
+		maxAttempts = 5
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	const q = `
+SELECT d.id,
+       u.email,
+       n.id, n.user_id, n.workspace_id, n.type, n.title, n.body, n.payload, n.is_read, n.created_at
+FROM notification_delivery d
+JOIN notifications n ON n.id = d.notification_id
+JOIN users u ON u.id = n.user_id
+WHERE d.channel = 'email'
+  AND d.attempts < $1
+  AND (
+    d.status IN ('pending', 'failed')
+    OR (d.status = 'processing' AND d.updated_at < (now() - interval '5 minutes'))
+  )
+ORDER BY d.created_at ASC
+FOR UPDATE SKIP LOCKED
+LIMIT $2;
+`
+	rows, err := tx.Query(ctx, q, maxAttempts, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	jobs := make([]EmailDeliveryJob, 0)
+	for rows.Next() {
+		var job EmailDeliveryJob
+		var n Notification
+		var payloadRaw []byte
+		var wsID *uuid.UUID
+		var typ string
+		if err := rows.Scan(&job.DeliveryID, &job.ToEmail, &n.ID, &n.UserID, &wsID, &typ, &n.Title, &n.Body, &payloadRaw, &n.IsRead, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		n.WorkspaceID = wsID
+		n.Type = NotificationType(typ)
+		if len(payloadRaw) > 0 {
+			_ = json.Unmarshal(payloadRaw, &n.Payload)
+		}
+		if n.Payload == nil {
+			n.Payload = map[string]any{}
+		}
+		job.Notif = n
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	const uq = `
+UPDATE notification_delivery
+SET status = $2,
+    attempts = attempts + 1,
+    error = NULL,
+    updated_at = now()
+WHERE id = $1::uuid;
+`
+	for _, j := range jobs {
+		if _, err := tx.Exec(ctx, uq, j.DeliveryID, string(StatusProcessing)); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
+func (r *Repo) UpdateDeliveryByID(ctx context.Context, deliveryID uuid.UUID, status DeliveryStatus, errText *string, sentAt *time.Time) error {
+	const q = `
+UPDATE notification_delivery
+SET status = $2,
+    error = $3,
+    sent_at = $4,
+    updated_at = now()
+WHERE id = $1::uuid;
+`
+	_, err := r.pool.Exec(ctx, q, deliveryID, string(status), errText, sentAt)
 	return err
 }
 
