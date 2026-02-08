@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package contracts.transactions.v1;
+
+service TransactionService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

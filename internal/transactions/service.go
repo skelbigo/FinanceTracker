@@ -3,17 +3,17 @@ package transactions
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/skelbigo/FinanceTracker/internal/analytics"
-	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/notifications"
 )
 
-type OverspendChecker interface {
-	CheckOverspendWithEvents(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, now time.Time) (budgets.OverspendResult, error)
+type BudgetHook interface {
+	HandleExpenseTransaction(ctx context.Context, workspaceID, actorUserID, transactionID, categoryID string, amountMinor int64, currency string, occurredAt time.Time)
 }
 
 type CategoryLookup interface {
@@ -21,15 +21,15 @@ type CategoryLookup interface {
 }
 
 type Service struct {
-	repo    *Repo
-	budgetC OverspendChecker
-	cats    CategoryLookup
-	inv     analytics.CacheIndex
-	notifs  *notifications.Service
+	repo   *Repo
+	budget BudgetHook
+	cats   CategoryLookup
+	inv    analytics.CacheIndex
+	notifs *notifications.Service
 }
 
-func NewService(repo *Repo, budgetChecker OverspendChecker, cats CategoryLookup) *Service {
-	return &Service{repo: repo, budgetC: budgetChecker, cats: cats}
+func NewService(repo *Repo, budget BudgetHook, cats CategoryLookup) *Service {
+	return &Service{repo: repo, budget: budget, cats: cats}
 }
 
 func (s *Service) WithAnalyticsCache(inv analytics.CacheIndex) *Service {
@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, t Transaction) (Transaction, error
 
 	s.notifyNewTransactionBestEffort(ctx, out)
 
-	s.checkOverspendBestEffort(ctx, out)
+	s.budgetBestEffort(ctx, out)
 	return out, nil
 }
 
@@ -117,7 +117,7 @@ func (s *Service) Update(ctx context.Context, t Transaction) (Transaction, error
 
 	s.invalidateAnalyticsBestEffort(ctx, out.WorkspaceID)
 
-	s.checkOverspendBestEffort(ctx, out)
+	s.budgetBestEffort(ctx, out)
 	return out, nil
 }
 
@@ -146,35 +146,19 @@ func (s *Service) invalidateAnalyticsBestEffort(ctx context.Context, workspaceID
 	}
 }
 
-func (s *Service) checkOverspendBestEffort(ctx context.Context, tx Transaction) {
-	if s.budgetC == nil || s.notifs == nil {
+func (s *Service) budgetBestEffort(ctx context.Context, tx Transaction) {
+	if s.budget == nil {
 		return
 	}
 	if tx.Type != TypeExpense || tx.CategoryID == nil {
 		return
 	}
-
-	wsID, err := uuid.Parse(tx.WorkspaceID)
-	if err != nil {
-		return
-	}
-	catID, err := uuid.Parse(*tx.CategoryID)
-	if err != nil {
+	catID := strings.TrimSpace(*tx.CategoryID)
+	if catID == "" {
 		return
 	}
 
-	res, err := s.budgetC.CheckOverspendWithEvents(ctx, wsID, catID, tx.Currency, tx.OccurredAt)
-	if err != nil {
-		log.Printf("overspend check: %v", err)
-		return
-	}
-	if !res.Overspent || len(res.NewEvents) == 0 {
-		return
-	}
-
-	for _, ev := range res.NewEvents {
-		s.notifs.NotifyOverspending(ctx, tx.WorkspaceID, tx.UserID, tx.ID, tx.AmountMinor, tx.Currency, tx.OccurredAt, ev)
-	}
+	s.budget.HandleExpenseTransaction(ctx, tx.WorkspaceID, tx.UserID, tx.ID, catID, tx.AmountMinor, tx.Currency, tx.OccurredAt)
 }
 
 func (s *Service) notifyNewTransactionBestEffort(ctx context.Context, tx Transaction) {

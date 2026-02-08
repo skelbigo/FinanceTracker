@@ -18,8 +18,12 @@ import (
 
 	"github.com/skelbigo/FinanceTracker/internal/config"
 	"github.com/skelbigo/FinanceTracker/internal/db"
-	"github.com/skelbigo/FinanceTracker/internal/httpapi"
+	"github.com/skelbigo/FinanceTracker/internal/gateway"
 	"github.com/skelbigo/FinanceTracker/internal/migrator"
+	"github.com/skelbigo/FinanceTracker/internal/notifications"
+
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type cliFlags struct {
@@ -98,14 +102,27 @@ func serve(cfg config.Config, startedAt time.Time, logger *log.Logger) error {
 	gin.DefaultWriter = logger.Writer()
 	gin.DefaultErrorWriter = logger.Writer()
 
-	app := httpapi.NewApp(cfg, pool, startedAt)
+	app := gateway.NewApp(cfg, pool, startedAt)
 	r := app.Router(logger.Writer())
+	deps := app.Deps()
 
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
 
-	srv := &http.Server{
+	httpSrv := &http.Server{
 		Addr:              addr,
 		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	grpcAddr := fmt.Sprintf(":%d", cfg.NotificationsGRPCPort)
+	grpcMux := http.NewServeMux()
+	notifications.RegisterGRPC(grpcMux, deps.NotificationsSvc, logger)
+	grpcSrv := &http.Server{
+		Addr:              grpcAddr,
+		Handler:           h2c.NewHandler(grpcMux, &http2.Server{}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -115,11 +132,27 @@ func serve(cfg config.Config, startedAt time.Time, logger *log.Logger) error {
 	runCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignal()
 
-	if err := runHTTPServer(runCtx, srv, addr, logger); err != nil {
-		return fmt.Errorf("server failed: %w", err)
-	}
+	sharedCtx, cancelAll := context.WithCancel(runCtx)
+	defer cancelAll()
 
-	logger.Printf("Server stopped")
+	errCh := make(chan error, 2)
+	go func() {
+		errCh <- runHTTPServer(sharedCtx, httpSrv, addr, logger)
+	}()
+	go func() {
+		logger.Printf("Starting notification-service gRPC addr=%s", grpcAddr)
+		errCh <- runHTTPServer(sharedCtx, grpcSrv, grpcAddr, logger)
+	}()
+
+	firstErr := <-errCh
+	if firstErr != nil {
+		cancelAll()
+		_ = <-errCh
+		return fmt.Errorf("server failed: %w", firstErr)
+	}
+	_ = <-errCh
+
+	logger.Printf("Servers stopped")
 	return nil
 }
 

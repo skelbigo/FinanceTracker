@@ -3,8 +3,6 @@ package budgets
 import (
 	"context"
 	"errors"
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -189,25 +187,6 @@ ORDER BY created_at DESC;
 		return nil, err
 	}
 	return out, nil
-}
-
-func (r *Repo) GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error) {
-	const q = `
-SELECT COALESCE(SUM(amount_minor), 0)
-FROM transactions
-WHERE workspace_id=$1
-	AND type='expense'
-	AND category_id=$2
-	AND currency=$3
-	AND occurred_at >= $4
-	AND occurred_at <  $5;
-`
-	var spent int64
-	err := r.db.QueryRow(ctx, q, workspaceID, categoryID, currency, from, to).Scan(&spent)
-	if err != nil {
-		return 0, err
-	}
-	return spent, nil
 }
 
 func (r *Repo) InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error) {

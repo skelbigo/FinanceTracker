@@ -1,4 +1,4 @@
-package httpapi
+package gateway
 
 import (
 	"github.com/gin-gonic/gin"
@@ -11,6 +11,10 @@ import (
 
 type App struct {
 	deps RouterDeps
+}
+
+func (a *App) Deps() RouterDeps {
+	return a.deps
 }
 
 func NewApp(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) *App {

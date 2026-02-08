@@ -2,12 +2,17 @@ package budgets
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1"
+	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
 
 type BudgetRepo interface {
@@ -18,8 +23,19 @@ type BudgetRepo interface {
 	GetBudgetByID(ctx context.Context, workspaceID, budgetID uuid.UUID) (Budget, error)
 	List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error)
 	ListByCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string) ([]Budget, error)
-	GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error)
 	InsertBudgetEvent(ctx context.Context, ev BudgetEvent) (bool, error)
+}
+
+type SpentReader interface {
+	GetSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error)
+}
+
+type MemberLister interface {
+	ListMembersInfo(ctx context.Context, workspaceID string) ([]workspaces.MemberInfo, error)
+}
+
+type NotificationClient interface {
+	CreateNotification(ctx context.Context, req *notificationsv1.CreateNotificationRequest) (*notificationsv1.CreateNotificationResponse, error)
 }
 
 type CategoryLookup interface {
@@ -29,18 +45,36 @@ type CategoryLookup interface {
 
 type Service struct {
 	repo           BudgetRepo
+	spent          SpentReader
 	categories     CategoryLookup
 	enforceExpense bool
+
+	members MemberLister
+	notifs  NotificationClient
 }
 
-func NewService(repo BudgetRepo, categories CategoryLookup, enforceExpense bool) *Service {
-	return &Service{repo: repo, categories: categories, enforceExpense: enforceExpense}
+func NewService(repo BudgetRepo, spent SpentReader, categories CategoryLookup, enforceExpense bool) *Service {
+	return &Service{repo: repo, spent: spent, categories: categories, enforceExpense: enforceExpense}
+}
+
+func (s *Service) WithNotifications(members MemberLister, notifs NotificationClient) *Service {
+	s.members = members
+	s.notifs = notifs
+	return s
 }
 
 var currencyRe = regexp.MustCompile(`^[A-Z]{3}$`)
 
 func normalizeCurrency(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))
+}
+
+func (s *Service) getSpentForCategory(ctx context.Context, workspaceID, categoryID uuid.UUID, currency string, from, to time.Time) (int64, error) {
+	if s.spent == nil {
+		// Budget module is usable without a Transaction module wired (e.g. unit tests).
+		return 0, nil
+	}
+	return s.spent.GetSpentForCategory(ctx, workspaceID, categoryID, currency, from, to)
 }
 
 func (s *Service) UpsertBudget(ctx context.Context, workspaceID uuid.UUID, req UpsertBudgetRequest) (Budget, error) {
@@ -125,7 +159,7 @@ func (s *Service) ListWithProgress(ctx context.Context, workspaceID uuid.UUID, p
 	out := make([]BudgetResponse, 0, len(items))
 	for _, b := range items {
 		start, end := PeriodBounds(now, b.Period)
-		spent, err := s.repo.GetSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
+		spent, err := s.getSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +190,7 @@ func (s *Service) CheckOverspendWithEvents(ctx context.Context, workspaceID, cat
 	res := OverspendResult{Overspent: false, NewEvents: make([]BudgetEvent, 0)}
 	for _, b := range budgets {
 		start, end := PeriodBounds(now, b.Period)
-		spent, err := s.repo.GetSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
+		spent, err := s.getSpentForCategory(ctx, workspaceID, b.CategoryID, b.Currency, start, end)
 		if err != nil {
 			return OverspendResult{}, err
 		}
@@ -191,4 +225,79 @@ func (s *Service) CheckOverspend(ctx context.Context, workspaceID, categoryID uu
 		return false, err
 	}
 	return res.Overspent, nil
+}
+
+func (s *Service) HandleExpenseTransaction(ctx context.Context, workspaceID, actorUserID, transactionID, categoryID string, amountMinor int64, currency string, occurredAt time.Time) {
+	if s.notifs == nil || s.members == nil {
+		return
+	}
+	wsID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return
+	}
+	catUUID, err := uuid.Parse(categoryID)
+	if err != nil {
+		return
+	}
+
+	res, err := s.CheckOverspendWithEvents(ctx, wsID, catUUID, currency, occurredAt)
+	if err != nil {
+		log.Printf("budget overspend check: %v", err)
+		return
+	}
+	if !res.Overspent || len(res.NewEvents) == 0 {
+		return
+	}
+
+	members, err := s.members.ListMembersInfo(ctx, workspaceID)
+	if err != nil {
+		log.Printf("budget members list: %v", err)
+		return
+	}
+
+	recipients := make([]string, 0, len(members))
+	for _, m := range members {
+		if m.Role != workspaces.RoleOwner && m.Role != workspaces.RoleMember {
+			continue
+		}
+		if m.UserID == actorUserID {
+			continue
+		}
+		recipients = append(recipients, m.UserID)
+	}
+	if len(recipients) == 0 {
+		return
+	}
+
+	for _, ev := range res.NewEvents {
+		payload := map[string]any{
+			"transactionId": transactionID,
+			"createdBy":     actorUserID,
+			"categoryId":    categoryID,
+			"amountMinor":   amountMinor,
+			"currency":      normalizeCurrency(currency),
+			"occurredAt":    occurredAt.UTC().Format(time.RFC3339),
+			"budgetId":      ev.BudgetID.String(),
+			"periodStart":   ev.PeriodStart.UTC().Format(time.RFC3339),
+			"periodEnd":     ev.PeriodEnd.UTC().Format(time.RFC3339),
+			"spentMinor":    ev.SpentMinor,
+			"limitMinor":    ev.LimitMinor,
+		}
+		payloadJSON, _ := json.Marshal(payload)
+
+		title := "Budget overspending"
+		body := fmt.Sprintf("Spent %d %s vs limit %d %s", ev.SpentMinor, ev.Currency, ev.LimitMinor, ev.Currency)
+
+		_, err := s.notifs.CreateNotification(ctx, &notificationsv1.CreateNotificationRequest{
+			WorkspaceId:      workspaceID,
+			RecipientUserIds: recipients,
+			Type:             "overspending",
+			Title:            title,
+			Body:             body,
+			PayloadJson:      string(payloadJSON),
+		})
+		if err != nil {
+			log.Printf("budget -> notification grpc: %v", err)
+		}
+	}
 }

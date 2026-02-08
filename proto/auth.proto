@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package contracts.auth.v1;
+
+service AuthService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

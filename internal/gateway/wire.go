@@ -1,18 +1,22 @@
-package httpapi
+package gateway
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/skelbigo/FinanceTracker/internal/analytics"
 	"github.com/skelbigo/FinanceTracker/internal/auth"
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
 	"github.com/skelbigo/FinanceTracker/internal/categories"
 	"github.com/skelbigo/FinanceTracker/internal/config"
+	"github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1"
 	"github.com/skelbigo/FinanceTracker/internal/notifications"
 	"github.com/skelbigo/FinanceTracker/internal/redisx"
 	"github.com/skelbigo/FinanceTracker/internal/transactions"
 	"github.com/skelbigo/FinanceTracker/internal/web"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
-	"time"
 )
 
 func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time) RouterDeps {
@@ -42,10 +46,13 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	catSvc := categories.NewService(catRepo)
 	catH := categories.NewHandler(catSvc, authMW, wsRepo)
 
+	// transactions
+	txRepo := transactions.NewRepo(pool)
+	txCatLookup := transactions.NewCategoryLookup(pool)
+
 	// budgets
 	bRepo := budgets.NewRepo(pool)
-	catLookup := budgets.NewCategoryLookup(pool)
-	bSvc := budgets.NewService(bRepo, catLookup, cfg.BudgetsEnforceExpenseCategories)
+	bSvc := budgets.NewService(bRepo, txRepo, txCatLookup, cfg.BudgetsEnforceExpenseCategories)
 	bH := budgets.NewHandler(bSvc, wsRepo, authMW)
 
 	// notifications
@@ -71,14 +78,13 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	})
 	notifH := notifications.NewHandler(notifSvc, authMW)
 
-	// transactions
-	txRepo := transactions.NewRepo(pool)
+	notifClient := notificationsv1.NewClient(fmt.Sprintf("127.0.0.1:%d", cfg.NotificationsGRPCPort))
+	bSvc.WithNotifications(wsRepo, notifClient)
 
 	// redis (analytics cache)
 	rdb := redisx.NewClient(cfg)
 	aCacheIndex := analytics.NewCacheIndex(rdb)
 
-	txCatLookup := transactions.NewCategoryLookup(pool)
 	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).WithAnalyticsCache(aCacheIndex).WithNotifications(notifSvc)
 	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
 

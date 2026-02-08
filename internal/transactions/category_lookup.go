@@ -33,3 +33,17 @@ LIMIT 1;
 	}
 	return false, err
 }
+
+func (r *CategoryLookupRepo) GetType(ctx context.Context, workspaceID, categoryID uuid.UUID) (string, error) {
+	const q = `
+SELECT type
+FROM categories
+WHERE id = $1 AND workspace_id = $2;
+`
+	var typ string
+	err := r.db.QueryRow(ctx, q, categoryID, workspaceID).Scan(&typ)
+	if err != nil {
+		return "", err
+	}
+	return typ, nil
+}

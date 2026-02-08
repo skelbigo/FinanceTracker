@@ -6,7 +6,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1"
+	"github.com/skelbigo/FinanceTracker/internal/workspaces"
 )
+
+type fakeMembers struct{ members []workspaces.MemberInfo }
+
+func (f fakeMembers) ListMembersInfo(ctx context.Context, workspaceID string) ([]workspaces.MemberInfo, error) {
+	return append([]workspaces.MemberInfo(nil), f.members...), nil
+}
+
+type fakeNotifClient struct {
+	calls []*notificationsv1.CreateNotificationRequest
+}
+
+func (f *fakeNotifClient) CreateNotification(ctx context.Context, req *notificationsv1.CreateNotificationRequest) (*notificationsv1.CreateNotificationResponse, error) {
+	f.calls = append(f.calls, req)
+	return &notificationsv1.CreateNotificationResponse{NotificationIds: []string{"n1"}}, nil
+}
 
 type fakeRepo struct {
 	budgets   []Budget
@@ -111,7 +129,7 @@ func TestService_CheckOverspend_NotOverLimit_NoEvent(t *testing.T) {
 		spent: map[string]int64{keySpent(catID, "UAH"): 999},
 	}
 
-	svc := NewService(repo, nil, false)
+	svc := NewService(repo, repo, nil, false)
 	now := time.Date(2026, time.February, 4, 18, 0, 0, 0, time.UTC)
 	res, err := svc.CheckOverspendWithEvents(context.Background(), wsID, catID, "UAH", now)
 	if err != nil {
@@ -145,7 +163,7 @@ func TestService_CheckOverspend_NoSpam_DoesNotInsertDuplicateEvent(t *testing.T)
 		spent: map[string]int64{keySpent(catID, "UAH"): 1200},
 	}
 
-	svc := NewService(repo, nil, false)
+	svc := NewService(repo, repo, nil, false)
 	now := time.Date(2026, time.February, 4, 18, 0, 0, 0, time.UTC)
 
 	res1, err := svc.CheckOverspendWithEvents(context.Background(), wsID, catID, "UAH", now)
@@ -168,5 +186,55 @@ func TestService_CheckOverspend_NoSpam_DoesNotInsertDuplicateEvent(t *testing.T)
 	}
 	if len(repo.events) != 1 {
 		t.Fatalf("repo events: got %d want %d", len(repo.events), 1)
+	}
+}
+
+func TestService_HandleExpenseTransaction_CallsNotificationClient_OnNewOverspendEvent(t *testing.T) {
+	wsID := uuid.New()
+	catID := uuid.New()
+	bID := uuid.New()
+
+	repo := &fakeRepo{
+		budgets: []Budget{{
+			ID:               bID,
+			WorkspaceID:      wsID,
+			CategoryID:       catID,
+			Period:           PeriodWeek,
+			AmountLimitMinor: 1000,
+			Currency:         "UAH",
+		}},
+		spent: map[string]int64{keySpent(catID, "UAH"): 1200},
+	}
+
+	actor := uuid.New().String()
+	other := uuid.New().String()
+	viewer := uuid.New().String()
+
+	mem := fakeMembers{members: []workspaces.MemberInfo{
+		{UserID: actor, Role: workspaces.RoleMember},
+		{UserID: other, Role: workspaces.RoleOwner},
+		{UserID: viewer, Role: workspaces.RoleViewer},
+	}}
+
+	client := &fakeNotifClient{}
+
+	svc := NewService(repo, repo, nil, false).WithNotifications(mem, client)
+
+	now := time.Date(2026, time.February, 4, 18, 0, 0, 0, time.UTC)
+	txID := uuid.New().String()
+	svc.HandleExpenseTransaction(context.Background(), wsID.String(), actor, txID, catID.String(), 100, "UAH", now)
+
+	if len(client.calls) != 1 {
+		t.Fatalf("calls: got %d want %d", len(client.calls), 1)
+	}
+	req := client.calls[0]
+	if req.WorkspaceId != wsID.String() {
+		t.Fatalf("workspace: got %q want %q", req.WorkspaceId, wsID.String())
+	}
+	if req.Type != "overspending" {
+		t.Fatalf("type: got %q want %q", req.Type, "overspending")
+	}
+	if len(req.RecipientUserIds) != 1 || req.RecipientUserIds[0] != other {
+		t.Fatalf("recipients: got %#v want [%q]", req.RecipientUserIds, other)
 	}
 }

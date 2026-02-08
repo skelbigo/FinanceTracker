@@ -29,6 +29,8 @@ const (
 
 	defaultBudgetsEnforceExpenseCategories = "true"
 
+	defaultNotificationsGRPCPort = "9090"
+
 	maxPort = 65535
 )
 
@@ -79,6 +81,8 @@ type Config struct {
 
 	BudgetsEnforceExpenseCategories bool
 
+	NotificationsGRPCPort int
+
 	AppPublicURL string
 
 	EmailEnabled bool
@@ -101,6 +105,11 @@ func Load() (Config, error) {
 	validateOneOf("APP_ENV", cfg.AppEnv, []string{"dev", "prod", "test"}, &errs)
 
 	cfg.AppPort = mustInt(getDefault("APP_PORT", defaultAppPort), "APP_PORT", &errs)
+
+	cfg.NotificationsGRPCPort = mustInt(getDefault("NOTIFICATIONS_GRPC_PORT", defaultNotificationsGRPCPort), "NOTIFICATIONS_GRPC_PORT", &errs)
+	if cfg.NotificationsGRPCPort <= 0 || cfg.NotificationsGRPCPort > maxPort {
+		errs = append(errs, fmt.Errorf("NOTIFICATIONS_GRPC_PORT out of range: %d", cfg.NotificationsGRPCPort))
+	}
 
 	cfg.CookieDomain = strings.TrimSpace(os.Getenv("COOKIE_DOMAIN"))
 

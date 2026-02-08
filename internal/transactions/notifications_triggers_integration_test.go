@@ -5,6 +5,9 @@ package transactions
 import (
 	"context"
 	"io"
+	"log"
+	"net"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -13,9 +16,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skelbigo/FinanceTracker/internal/budgets"
+	"github.com/skelbigo/FinanceTracker/internal/contracts/notificationsv1"
 	"github.com/skelbigo/FinanceTracker/internal/migrator"
 	"github.com/skelbigo/FinanceTracker/internal/notifications"
 	"github.com/skelbigo/FinanceTracker/internal/workspaces"
+
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 func integrationDSN(t *testing.T) string {
@@ -201,10 +208,29 @@ func TestIntegration_TriggerOverspending_NotifiesOnceAndNoSpam(t *testing.T) {
 	nSvc := notifications.NewService(nRepo, wsRepo, nil, nil, nil, notifications.Options{})
 
 	bRepo := budgets.NewRepo(pool)
-	bSvc := budgets.NewService(bRepo, nil, false)
-
 	tRepo := NewRepo(pool)
-	tSvc := NewService(tRepo, bSvc, nil).WithNotifications(nSvc)
+	txCatLookup := NewCategoryLookup(pool)
+	bSvc := budgets.NewService(bRepo, tRepo, txCatLookup, false)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	grpcAddr := ln.Addr().String()
+	grpcMux := http.NewServeMux()
+	notifications.RegisterGRPC(grpcMux, nSvc, log.New(io.Discard, "", 0))
+	grpcSrv := &http.Server{Handler: h2c.NewHandler(grpcMux, &http2.Server{})}
+	go func() { _ = grpcSrv.Serve(ln) }()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = grpcSrv.Shutdown(ctx)
+	})
+
+	nClient := notificationsv1.NewClient(grpcAddr)
+	bSvc.WithNotifications(wsRepo, nClient)
+
+	tSvc := NewService(tRepo, bSvc, txCatLookup).WithNotifications(nSvc)
 
 	occ1 := time.Date(2026, time.February, 4, 12, 0, 0, 0, time.UTC)
 	catStr := catID.String()
