@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -150,6 +151,35 @@ func (r *Repo) MarkAllRead(ctx context.Context, userID uuid.UUID) (int64, error)
 		return 0, err
 	}
 	return ct.RowsAffected(), nil
+}
+
+func (r *Repo) GetForUser(ctx context.Context, userID, notificationID uuid.UUID) (Notification, bool, error) {
+	const q = `
+SELECT id, user_id, workspace_id, type, title, body, payload, is_read, created_at
+FROM notifications
+WHERE id=$1::uuid AND user_id=$2::uuid;
+`
+	var n Notification
+	var payloadRaw []byte
+	var wsID *uuid.UUID
+	var typ string
+	err := r.pool.QueryRow(ctx, q, notificationID, userID).
+		Scan(&n.ID, &n.UserID, &wsID, &typ, &n.Title, &n.Body, &payloadRaw, &n.IsRead, &n.CreatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return Notification{}, false, nil
+		}
+		return Notification{}, false, err
+	}
+	n.WorkspaceID = wsID
+	n.Type = NotificationType(typ)
+	if len(payloadRaw) > 0 {
+		_ = json.Unmarshal(payloadRaw, &n.Payload)
+	}
+	if n.Payload == nil {
+		n.Payload = map[string]any{}
+	}
+	return n, true, nil
 }
 
 func (r *Repo) InsertDelivery(ctx context.Context, notificationID uuid.UUID, channel DeliveryChannel, status DeliveryStatus, errText *string, attempts int, sentAt *time.Time) error {

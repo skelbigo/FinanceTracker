@@ -59,6 +59,7 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 
 	app.GET("/notifications", h.GetNotificationsPage)
 	app.GET("/notifications/goto", h.GetNotificationGoto)
+	app.GET("/notifications/:id/goto", h.GetNotificationGoto)
 	app.POST("/notifications/:id/read", h.PostNotificationRead)
 	app.POST("/notifications/read-all", h.PostNotificationsReadAll)
 

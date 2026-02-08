@@ -1722,3 +1722,20 @@ body.auth::after {
 .empty { padding: 18px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 14px; color: rgba(255,255,255,0.75); }
 .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.notif-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 6px; margin-left: 8px; border-radius: 999px; font-size: 12px; line-height: 18px; border: 1px solid rgba(0,210,198,0.6); background: rgba(0,210,198,0.18); color: rgba(255,255,255,0.95); }
+.notif-badge.is-hidden { display: none; }
+
+.notif-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+.notif-filters { display: inline-flex; gap: 8px; }
+.notif-filter { font-size: 13px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); text-decoration: none; }
+.notif-filter.is-active { border-color: rgba(0,210,198,0.65); }
+.notif-card { padding: 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(255,255,255,0.03); }
+.notif-read { opacity: 0.75; }
+.notif-unread { }
+.notif-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.notif-time { font-size: 12px; color: rgba(255,255,255,0.6); }
+.notif-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: rgba(0,210,198,0.95); margin-right: 8px; vertical-align: middle; }
+.notif-read-label { font-size: 12px; color: rgba(255,255,255,0.6); }
+.notif-empty { padding: 18px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 14px; color: rgba(255,255,255,0.75); }
+.notif-pager { margin-top: 18px; }

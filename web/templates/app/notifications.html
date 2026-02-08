@@ -34,6 +34,7 @@
             <p class="notif-body">{{ .Body }}</p>
 
             <footer class="notif-actions">
+                <a class="tx-btn tx-btn--ghost" href="{{ .GotoURL }}">{{ .GotoLabel }}</a>
                 {{ if not .IsRead }}
                 <form method="post" action="/app/notifications/{{ .ID }}/read">
                     <input type="hidden" name="csrf_token" value="{{ $.CSRF }}">

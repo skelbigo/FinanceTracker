@@ -122,6 +122,18 @@ func (s *Service) MarkAllRead(ctx context.Context, userID string) (int64, error)
 	return s.repo.MarkAllRead(ctx, uid)
 }
 
+func (s *Service) GetForUser(ctx context.Context, userID, notificationID string) (Notification, bool, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return Notification{}, false, err
+	}
+	nid, err := uuid.Parse(notificationID)
+	if err != nil {
+		return Notification{}, false, err
+	}
+	return s.repo.GetForUser(ctx, uid, nid)
+}
+
 func (s *Service) SavePushSubscription(ctx context.Context, userID string, endpoint string, keys map[string]any) error {
 	uid, err := uuid.Parse(userID)
 	if err != nil {
