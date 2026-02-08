@@ -96,10 +96,12 @@ func TestIntegration_NotificationsRBAC_PrivateByUserID(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	authMW := testAuthFromHeader()
+	r.Use(authMW)
 
 	repo := notifications.NewRepo(pool)
-	svc := notifications.NewService(repo, nil, nil, notifications.NoopPushSender{}, notifications.Options{})
-	h := notifications.NewHandler(svc, testAuthFromHeader())
+	svc := notifications.NewService(repo, nil, nil, nil, notifications.NoopPushSender{}, notifications.Options{})
+	h := notifications.NewHandler(svc)
 	h.RegisterRoutes(r)
 
 	{

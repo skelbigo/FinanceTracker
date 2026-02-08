@@ -33,7 +33,7 @@ func projectRoot() string {
 func testAuthFromHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if uid := c.GetHeader("X-Test-User"); uid != "" {
-			c.Set(identity.CtxUserIDKey, uid)
+			c.Set(auth.CtxUserIDKey, uid)
 		}
 		c.Next()
 	}
@@ -95,15 +95,17 @@ func TestIntegration_RBACWorkspaceAccess(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	authMW := testAuthFromHeader()
+	r.Use(authMW)
 
 	wsRepo := workspaces.NewRepo(pool)
-	wsSvc := workspaces.NewService(wsRepo)
-	wsHandler := workspaces.NewHandler(wsSvc, testAuthFromHeader(), wsRepo)
+	wsSvc := workspaces.NewService(wsRepo, nil)
+	wsHandler := workspaces.NewHandler(wsSvc, wsRepo)
 	wsHandler.RegisterRoutes(r)
 
 	txRepo := transactions.NewRepo(pool)
 	txSvc := transactions.NewService(txRepo, nil, nil)
-	txHandler := transactions.NewHandler(txSvc, testAuthFromHeader(), wsRepo)
+	txHandler := transactions.NewHandler(txSvc, wsRepo)
 	txHandler.RegisterRoutes(r)
 
 	createPayload, _ := json.Marshal(map[string]any{

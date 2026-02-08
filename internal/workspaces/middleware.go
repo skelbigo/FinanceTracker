@@ -77,6 +77,15 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 			workspaceID = c.Param("workspaceId")
 		}
 		if workspaceID == "" {
+			workspaceID = c.GetHeader("X-Workspace-Id")
+		}
+		if workspaceID == "" {
+			workspaceID = c.GetHeader("X-Workspace-ID")
+		}
+		if workspaceID == "" {
+			workspaceID = c.Query("workspace_id")
+		}
+		if workspaceID == "" {
 			httpx.BadRequest(c, "invalid workspace id", map[string]string{"id": "required"})
 			c.Abort()
 			return

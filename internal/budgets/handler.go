@@ -13,16 +13,14 @@ import (
 type Handler struct {
 	svc *Service
 	ws  workspaces.RoleProvider
-	mw  gin.HandlerFunc
 }
 
-func NewHandler(svc *Service, ws workspaces.RoleProvider, mw gin.HandlerFunc) *Handler {
-	return &Handler{svc: svc, ws: ws, mw: mw}
+func NewHandler(svc *Service, ws workspaces.RoleProvider) *Handler {
+	return &Handler{svc: svc, ws: ws}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/workspaces")
-	g.Use(h.mw)
 	wsg := g.Group("/:id")
 	wsg.GET("/budgets",
 		workspaces.RequireWorkspaceRole(h.ws, workspaces.RoleViewer),

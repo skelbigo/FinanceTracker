@@ -12,17 +12,15 @@ import (
 
 type Handler struct {
 	svc    *Service
-	authMW gin.HandlerFunc
 	wsRepo workspaces.RoleProvider
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc, wsRepo workspaces.RoleProvider) *Handler {
-	return &Handler{svc: svc, authMW: authMW, wsRepo: wsRepo}
+func NewHandler(svc *Service, wsRepo workspaces.RoleProvider) *Handler {
+	return &Handler{svc: svc, wsRepo: wsRepo}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/workspaces/:id/analytics")
-	g.Use(h.authMW)
 	g.Use(workspaces.RequireWorkspaceRole(h.wsRepo, workspaces.RoleViewer))
 
 	g.GET("", h.analytics)

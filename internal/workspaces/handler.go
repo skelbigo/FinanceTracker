@@ -12,21 +12,18 @@ import (
 
 type Handler struct {
 	svc  *Service
-	mw   gin.HandlerFunc
 	repo RoleProvider
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc, repo RoleProvider) *Handler {
+func NewHandler(svc *Service, repo RoleProvider) *Handler {
 	return &Handler{
 		svc:  svc,
-		mw:   authMW,
 		repo: repo,
 	}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/workspaces")
-	g.Use(h.mw)
 
 	g.POST("", h.CreateWorkspace)
 	g.GET("", h.ListMyWorkspaces)

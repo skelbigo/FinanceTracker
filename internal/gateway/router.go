@@ -110,22 +110,17 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 	}
 	web.RegisterRoutes(r, webHandlers)
 
-	deps.Auth.RegisterRoutes(r)
-	deps.Workspaces.RegisterRoutes(r)
-	deps.Categories.RegisterRoutes(r)
-	deps.Transactions.RegisterRoutes(r)
-	deps.Budgets.RegisterRoutes(r)
-	deps.Analytics.RegisterRoutes(r)
-	deps.Notifications.RegisterRoutes(r)
-
 	api := r.Group("/api")
 	deps.Auth.RegisterRoutes(api)
-	deps.Workspaces.RegisterRoutes(api)
-	deps.Categories.RegisterRoutes(api)
-	deps.Transactions.RegisterRoutes(api)
-	deps.Budgets.RegisterRoutes(api)
-	deps.Analytics.RegisterRoutes(api)
-	deps.Notifications.RegisterRoutes(api)
+
+	authed := api.Group("")
+	authed.Use(auth.AuthRequired(deps.JWTM))
+	deps.Workspaces.RegisterRoutes(authed)
+	deps.Categories.RegisterRoutes(authed)
+	deps.Transactions.RegisterRoutes(authed)
+	deps.Budgets.RegisterRoutes(authed)
+	deps.Analytics.RegisterRoutes(authed)
+	deps.Notifications.RegisterRoutes(authed)
 
 	return r
 }

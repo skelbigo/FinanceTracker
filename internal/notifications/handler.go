@@ -9,24 +9,21 @@ import (
 )
 
 type Handler struct {
-	svc    *Service
-	authMW gin.HandlerFunc
+	svc *Service
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc) *Handler {
-	return &Handler{svc: svc, authMW: authMW}
+func NewHandler(svc *Service) *Handler {
+	return &Handler{svc: svc}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g := r.Group("/notifications")
-	g.Use(h.authMW)
 	g.GET("", h.list)
 	g.PATCH("/:id", h.patch)
 	g.POST("/:id/read", h.read)
 	g.POST("/read-all", h.readAll)
 
 	p := r.Group("/push")
-	p.Use(h.authMW)
 	p.POST("/subscriptions", h.upsertPushSub)
 	p.DELETE("/subscriptions", h.deletePushSub)
 }

@@ -40,12 +40,12 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	// workspaces
 	wsSvc := workspaces.NewService(wsRepo, usersAdapter)
-	wsH := workspaces.NewHandler(wsSvc, authMW, wsRepo)
+	wsH := workspaces.NewHandler(wsSvc, wsRepo)
 
 	// categories
 	catRepo := categories.NewRepo(pool)
 	catSvc := categories.NewService(catRepo)
-	catH := categories.NewHandler(catSvc, authMW, wsRepo)
+	catH := categories.NewHandler(catSvc, wsRepo)
 
 	// transactions
 	txRepo := transactions.NewRepo(pool)
@@ -54,7 +54,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	// budgets
 	bRepo := budgets.NewRepo(pool)
 	bSvc := budgets.NewService(bRepo, txRepo, txCatLookup, cfg.BudgetsEnforceExpenseCategories)
-	bH := budgets.NewHandler(bSvc, wsRepo, authMW)
+	bH := budgets.NewHandler(bSvc, wsRepo)
 
 	// notifications
 	notifRepo := notifications.NewRepo(pool)
@@ -77,7 +77,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		EmailNotifyOverspending:   cfg.EmailNotifyOverspending,
 		EmailNotifyNewTransaction: cfg.EmailNotifyNewTransaction,
 	})
-	notifH := notifications.NewHandler(notifSvc, authMW)
+	notifH := notifications.NewHandler(notifSvc)
 
 	notifClient := notificationsv1.NewClient(fmt.Sprintf("127.0.0.1:%d", cfg.NotificationsGRPCPort))
 	bSvc.WithNotifications(budgetMembersAdapter{wsRepo: wsRepo}, notifClient)
@@ -88,13 +88,13 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 
 	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).
 		WithAnalyticsCache(aCacheIndex).
-		WithNewTransactionHook(newTransactionHook{wsRepo: wsRepo, notifs: notifSvc})
-	txH := transactions.NewHandler(txSvc, authMW, wsRepo)
+		WithNewTransactionHook(&newTransactionHook{wsRepo: wsRepo, notifs: notifSvc})
+	txH := transactions.NewHandler(txSvc, wsRepo)
 
 	// analytics
 	aRepo := analytics.NewRepo(pool)
 	aSvc := analytics.NewService(aRepo, rdb, aCacheIndex, cfg.AnalyticsCacheTTL())
-	aH := analytics.NewHandler(aSvc, authMW, wsRepo)
+	aH := analytics.NewHandler(aSvc, wsRepo)
 
 	return RouterDeps{
 		Readiness: pool,
