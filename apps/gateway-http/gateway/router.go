@@ -35,6 +35,8 @@ type RouterDeps struct {
 	Readiness ReadinessChecker
 	StartedAt time.Time
 
+	WorkspaceRBAC workspaces.RoleProvider
+
 	JWTM       *auth.JWTManager
 	AuthSvc    *auth.Service
 	AccessTTL  time.Duration
@@ -115,6 +117,9 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 
 	authed := api.Group("")
 	authed.Use(auth.AuthRequired(deps.JWTM))
+	if deps.WorkspaceRBAC != nil {
+		authed.Use(WorkspaceContext(deps.WorkspaceRBAC))
+	}
 	deps.Workspaces.RegisterRoutes(authed)
 	deps.Categories.RegisterRoutes(authed)
 	deps.Transactions.RegisterRoutes(authed)

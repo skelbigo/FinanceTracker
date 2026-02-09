@@ -64,6 +64,23 @@ func RequireWorkspaceRole(repo RoleProvider, minRole Role) gin.HandlerFunc {
 			return
 		}
 
+		if wsID, ok := GetWorkspaceID(c); ok {
+			if actual, ok := GetWorkspaceRole(c); ok {
+				if RoleAtLeast(actual, minRole) {
+					c.Next()
+					return
+				}
+
+				httpx.Error(c, http.StatusForbidden, "insufficient role", map[string]string{
+					"required": string(minRole),
+					"actual":   string(actual),
+				})
+				c.Abort()
+				return
+			}
+			_ = wsID
+		}
+
 		v, exists := c.Get(identity.CtxUserIDKey)
 		userID, ok := v.(string)
 		if !exists || !ok || userID == "" {
