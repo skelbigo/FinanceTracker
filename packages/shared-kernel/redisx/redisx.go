@@ -19,6 +19,48 @@ type Client struct {
 	rwTimeout   time.Duration
 }
 
+func (c *Client) Incr(ctx context.Context, key string) (int64, error) {
+	if strings.TrimSpace(key) == "" {
+		return 0, nil
+	}
+	replies, err := c.Pipeline(ctx, []string{"INCR", key})
+	if err != nil {
+		return 0, err
+	}
+	if len(replies) != 1 {
+		return 0, errors.New("redis: unexpected reply count")
+	}
+	n, ok := replies[0].(int64)
+	if !ok {
+		return 0, errors.New("redis: expected integer reply")
+	}
+	return n, nil
+}
+
+func (c *Client) TTL(ctx context.Context, key string) (ttl time.Duration, found bool, err error) {
+	if strings.TrimSpace(key) == "" {
+		return 0, false, nil
+	}
+	replies, err := c.Pipeline(ctx, []string{"TTL", key})
+	if err != nil {
+		return 0, false, err
+	}
+	if len(replies) != 1 {
+		return 0, false, errors.New("redis: unexpected reply count")
+	}
+	n, ok := replies[0].(int64)
+	if !ok {
+		return 0, false, errors.New("redis: expected integer reply")
+	}
+	if n == -2 {
+		return 0, false, nil
+	}
+	if n < 0 {
+		return 0, true, nil
+	}
+	return time.Duration(n) * time.Second, true, nil
+}
+
 func NewClient(cfg config.Config) *Client {
 	if !cfg.RedisEnabled {
 		return nil

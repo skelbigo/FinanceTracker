@@ -23,7 +23,13 @@ const (
 
 	defaultJWTAccessTTLMinutes = "15"
 	defaultRefreshTTLDays      = "30"
+	defaultBCryptCost          = "12"
 	defaultCSRFTTLMinutes      = "120"
+
+	defaultLoginRateLimitEnabled       = "true"
+	defaultLoginRateLimitWindowSeconds = "300" // 5 minutes
+	defaultLoginRateLimitMaxPerIP      = "20"
+	defaultLoginRateLimitMaxPerEmail   = "10"
 
 	defaultAnalyticsCacheTTLMinutes = "20"
 
@@ -78,6 +84,12 @@ type Config struct {
 	JWTSecret           string
 	JWTAccessTTLMinutes int
 	RefreshTTLDays      int
+	BCryptCost          int
+
+	LoginRateLimitEnabled             bool
+	LoginRateLimitWindowSeconds       int
+	LoginRateLimitMaxAttemptsPerIP    int
+	LoginRateLimitMaxAttemptsPerEmail int
 
 	BudgetsEnforceExpenseCategories bool
 
@@ -198,6 +210,25 @@ func Load() (Config, error) {
 		cfg.RefreshTTLDays = mustInt(getDefault("REFRESH_TTL_DAYS", defaultRefreshTTLDays), "REFRESH_TTL_DAYS", &errs)
 	}
 
+	cfg.BCryptCost = mustInt(getDefault("BCRYPT_COST", defaultBCryptCost), "BCRYPT_COST", &errs)
+	if cfg.BCryptCost < 10 || cfg.BCryptCost > 14 {
+		errs = append(errs, fmt.Errorf("BCRYPT_COST must be between 10 and 14 (got %d)", cfg.BCryptCost))
+	}
+
+	loginRLEnabledRaw := strings.TrimSpace(os.Getenv("LOGIN_RATE_LIMIT_ENABLED"))
+	if loginRLEnabledRaw == "" {
+		loginRLEnabledRaw = defaultLoginRateLimitEnabled
+	}
+	loginRLEnabled, _, loginRLErr := parseBoolOptional(loginRLEnabledRaw, "LOGIN_RATE_LIMIT_ENABLED")
+	if loginRLErr != nil {
+		errs = append(errs, loginRLErr)
+	}
+	cfg.LoginRateLimitEnabled = loginRLEnabled
+
+	cfg.LoginRateLimitWindowSeconds = mustInt(getDefault("LOGIN_RATE_LIMIT_WINDOW_SECONDS", defaultLoginRateLimitWindowSeconds), "LOGIN_RATE_LIMIT_WINDOW_SECONDS", &errs)
+	cfg.LoginRateLimitMaxAttemptsPerIP = mustInt(getDefault("LOGIN_RATE_LIMIT_MAX_PER_IP", defaultLoginRateLimitMaxPerIP), "LOGIN_RATE_LIMIT_MAX_PER_IP", &errs)
+	cfg.LoginRateLimitMaxAttemptsPerEmail = mustInt(getDefault("LOGIN_RATE_LIMIT_MAX_PER_EMAIL", defaultLoginRateLimitMaxPerEmail), "LOGIN_RATE_LIMIT_MAX_PER_EMAIL", &errs)
+
 	cfg.BudgetsEnforceExpenseCategories = mustBool(
 		getDefault("BUDGETS_ENFORCE_EXPENSE_CATEGORIES", defaultBudgetsEnforceExpenseCategories),
 		"BUDGETS_ENFORCE_EXPENSE_CATEGORIES",
@@ -268,6 +299,17 @@ func Load() (Config, error) {
 	}
 	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
 		errs = append(errs, fmt.Errorf("JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
+	}
+	if cfg.LoginRateLimitEnabled {
+		if cfg.LoginRateLimitWindowSeconds < 30 || cfg.LoginRateLimitWindowSeconds > 3600 {
+			errs = append(errs, fmt.Errorf("LOGIN_RATE_LIMIT_WINDOW_SECONDS out of range: %d", cfg.LoginRateLimitWindowSeconds))
+		}
+		if cfg.LoginRateLimitMaxAttemptsPerIP <= 0 || cfg.LoginRateLimitMaxAttemptsPerIP > 1000 {
+			errs = append(errs, fmt.Errorf("LOGIN_RATE_LIMIT_MAX_PER_IP out of range: %d", cfg.LoginRateLimitMaxAttemptsPerIP))
+		}
+		if cfg.LoginRateLimitMaxAttemptsPerEmail <= 0 || cfg.LoginRateLimitMaxAttemptsPerEmail > 1000 {
+			errs = append(errs, fmt.Errorf("LOGIN_RATE_LIMIT_MAX_PER_EMAIL out of range: %d", cfg.LoginRateLimitMaxAttemptsPerEmail))
+		}
 	}
 	if cfg.DBPort <= 0 || cfg.DBPort > maxPort {
 		errs = append(errs, fmt.Errorf("DB_PORT out of range: %d", cfg.DBPort))

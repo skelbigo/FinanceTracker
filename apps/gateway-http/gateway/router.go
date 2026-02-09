@@ -15,6 +15,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/apps/notification-service/notifications"
 	"github.com/skelbigo/FinanceTracker/apps/transaction-service/categories"
 	"github.com/skelbigo/FinanceTracker/apps/transaction-service/transactions"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/ratelimit"
 )
 
 var (
@@ -37,11 +38,12 @@ type RouterDeps struct {
 
 	WorkspaceRBAC workspaces.RoleProvider
 
-	JWTM       *auth.JWTManager
-	AuthSvc    *auth.Service
-	AccessTTL  time.Duration
-	RefreshTTL time.Duration
-	CookieCfg  web.CookieConfig
+	JWTM         *auth.JWTManager
+	AuthSvc      *auth.Service
+	LoginLimiter *ratelimit.LoginLimiter
+	AccessTTL    time.Duration
+	RefreshTTL   time.Duration
+	CookieCfg    web.CookieConfig
 
 	CSRFSecret string
 	CSRFTTL    time.Duration
@@ -102,10 +104,11 @@ func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
 		Analytics:     deps.AnalyticsSvc,
 		Notifications: deps.NotificationsSvc,
 
-		JWTM:       deps.JWTM,
-		CookieCfg:  deps.CookieCfg,
-		AccessTTL:  deps.AccessTTL,
-		RefreshTTL: deps.RefreshTTL,
+		JWTM:         deps.JWTM,
+		LoginLimiter: deps.LoginLimiter,
+		CookieCfg:    deps.CookieCfg,
+		AccessTTL:    deps.AccessTTL,
+		RefreshTTL:   deps.RefreshTTL,
 
 		CSRFSecret: deps.CSRFSecret,
 		CSRFTTL:    deps.CSRFTTL,

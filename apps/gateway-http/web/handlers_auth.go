@@ -90,8 +90,26 @@ func (h *Handlers) PostResetConfirm(c *gin.Context) {
 }
 
 func (h *Handlers) PostLogin(c *gin.Context) {
+	ip := c.ClientIP()
+	email := c.PostForm("email")
+	if h.LoginLimiter != nil {
+		ok, retryAfter, _ := h.LoginLimiter.Allow(c.Request.Context(), ip, email)
+		if !ok {
+			flash := "Too many login attempts. Please try again in " + h.LoginLimiter.RetryAfterHeader(retryAfter) + " seconds."
+			c.Status(http.StatusTooManyRequests)
+			h.render(c, "auth/login.html", gin.H{
+				"Title":      "Login",
+				"Flash":      flash,
+				"BodyClass":  "auth",
+				"MainClass":  "auth-main",
+				"HideHeader": true,
+			})
+			return
+		}
+	}
+
 	req := auth.LoginRequest{
-		Email:    c.PostForm("email"),
+		Email:    email,
 		Password: c.PostForm("password"),
 	}
 
@@ -117,6 +135,10 @@ func (h *Handlers) PostLogin(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	if h.LoginLimiter != nil {
+		h.LoginLimiter.Reset(c.Request.Context(), ip, email)
 	}
 
 	setAuthCookies(c, h.CookieCfg, resp.AccessToken, h.AccessTTL, resp.RefreshToken, h.RefreshTTL)

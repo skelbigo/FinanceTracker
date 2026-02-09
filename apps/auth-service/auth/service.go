@@ -22,15 +22,17 @@ type Service struct {
 	refreshTTL       time.Duration
 	resetTTL         time.Duration
 	returnResetToken bool
+	bcryptCost       int
 }
 
-func NewService(repo *Repo, jwt JWT, refreshTTL, resetTTL time.Duration, returnResetToken bool) *Service {
+func NewService(repo *Repo, jwt JWT, refreshTTL, resetTTL time.Duration, returnResetToken bool, bcryptCost int) *Service {
 	return &Service{
 		repo:             repo,
 		jwt:              jwt,
 		refreshTTL:       refreshTTL,
 		resetTTL:         resetTTL,
 		returnResetToken: returnResetToken,
+		bcryptCost:       bcryptCost,
 	}
 }
 
@@ -83,7 +85,7 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 		return ErrInvalidResetToken
 	}
 
-	passHash, err := HashPassword(newPassword)
+	passHash, err := HashPassword(newPassword, s.bcryptCost)
 	if err != nil {
 		return err
 	}
@@ -110,7 +112,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 		namePtr = &nameTrim
 	}
 
-	passHash, err := HashPassword(password)
+	passHash, err := HashPassword(password, s.bcryptCost)
 	if err != nil {
 		return RegisterResponse{}, err
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/apps/transaction-service/transactions"
 	"github.com/skelbigo/FinanceTracker/packages/contracts/notificationsv1"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/config"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/ratelimit"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/redisx"
 )
 
@@ -24,6 +25,10 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	refreshTTL := cfg.RefreshTTL()
 	resetTTL := 30 * time.Minute
 	returnResetToken := cfg.AppEnv != "prod"
+
+	// redis
+	rdb := redisx.NewClient(cfg)
+	loginLimiter := ratelimit.NewLoginLimiter(cfg, rdb)
 
 	cookieCfg := web.CookieConfig{Domain: cfg.CookieDomain, Secure: cfg.CookieSecure}
 
@@ -35,8 +40,8 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	// auth
 	authRepo := auth.NewRepo(pool)
 	usersAdapter := NewAuthUsersAdapter(authRepo)
-	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL, resetTTL, returnResetToken)
-	authH := auth.NewHandler(authSvc, authMW)
+	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL, resetTTL, returnResetToken, cfg.BCryptCost)
+	authH := auth.NewHandler(authSvc, authMW, loginLimiter)
 
 	// workspaces
 	wsSvc := workspaces.NewService(wsRepo, usersAdapter)
@@ -82,8 +87,7 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	notifClient := notificationsv1.NewClient(fmt.Sprintf("127.0.0.1:%d", cfg.NotificationsGRPCPort))
 	bSvc.WithNotifications(budgetMembersAdapter{wsRepo: wsRepo}, notifClient)
 
-	// redis (analytics cache)
-	rdb := redisx.NewClient(cfg)
+	// analytics cache
 	aCacheIndex := analytics.NewCacheIndex(rdb)
 
 	txSvc := transactions.NewService(txRepo, bSvc, txCatLookup).WithAnalyticsCache(aCacheIndex).WithNotifications(notifSvc)
@@ -99,11 +103,12 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 		StartedAt:     startedAt,
 		WorkspaceRBAC: wsRepo,
 
-		JWTM:       jwtMgr,
-		AuthSvc:    authSvc,
-		AccessTTL:  accessTTL,
-		RefreshTTL: refreshTTL,
-		CookieCfg:  cookieCfg,
+		JWTM:         jwtMgr,
+		AuthSvc:      authSvc,
+		LoginLimiter: loginLimiter,
+		AccessTTL:    accessTTL,
+		RefreshTTL:   refreshTTL,
+		CookieCfg:    cookieCfg,
 
 		CSRFSecret: cfg.CSRFSecret,
 		CSRFTTL:    cfg.CSRFTTL(),

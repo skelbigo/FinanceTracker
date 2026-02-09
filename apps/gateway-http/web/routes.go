@@ -12,6 +12,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/apps/notification-service/notifications"
 	"github.com/skelbigo/FinanceTracker/apps/transaction-service/categories"
 	"github.com/skelbigo/FinanceTracker/apps/transaction-service/transactions"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/ratelimit"
 )
 
 type Handlers struct {
@@ -25,6 +26,7 @@ type Handlers struct {
 	Analytics     *analytics.Service
 	Notifications *notifications.Service
 	JWTM          *auth.JWTManager
+	LoginLimiter  *ratelimit.LoginLimiter
 
 	CookieCfg  CookieConfig
 	AccessTTL  time.Duration

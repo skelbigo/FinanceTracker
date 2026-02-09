@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/httpx"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/identity"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/ratelimit"
 	"log"
 	"net/http"
 )
@@ -13,10 +14,11 @@ import (
 type Handler struct {
 	svc *Service
 	mw  gin.HandlerFunc
+	rl  *ratelimit.LoginLimiter
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc) *Handler {
-	return &Handler{svc: svc, mw: authMW}
+func NewHandler(svc *Service, authMW gin.HandlerFunc, loginLimiter *ratelimit.LoginLimiter) *Handler {
+	return &Handler{svc: svc, mw: authMW, rl: loginLimiter}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
@@ -47,6 +49,8 @@ func (h *Handler) register(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrEmailTaken):
 			httpx.BadRequest(c, "email already exists", nil)
+		case errors.Is(err, ErrWeakPassword):
+			httpx.BadRequest(c, err.Error(), nil)
 		default:
 			log.Printf("auth.register: %v", err)
 			httpx.Internal(c)
@@ -63,6 +67,20 @@ func (h *Handler) login(c *gin.Context) {
 		return
 	}
 
+	if h.rl != nil {
+		ok, retryAfter, rlErr := h.rl.Allow(c.Request.Context(), c.ClientIP(), req.Email)
+		if rlErr != nil {
+			log.Printf("auth.login: rate limit check failed: %v", rlErr)
+			httpx.Internal(c)
+			return
+		}
+		if !ok {
+			c.Header("Retry-After", h.rl.RetryAfterHeader(retryAfter))
+			httpx.Error(c, http.StatusTooManyRequests, "too many login attempts, please try again later", nil)
+			return
+		}
+	}
+
 	resp, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
 		switch {
@@ -76,6 +94,10 @@ func (h *Handler) login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+
+	if h.rl != nil {
+		h.rl.Reset(c.Request.Context(), c.ClientIP(), req.Email)
+	}
 }
 
 func (h *Handler) refresh(c *gin.Context) {
