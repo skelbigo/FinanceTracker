@@ -72,8 +72,8 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	if token == "" {
 		return errors.New("token is required")
 	}
-	if len(newPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
+	if err := ValidatePasswordPolicy(newPassword); err != nil {
+		return err
 	}
 
 	h := HashResetToken(token)
@@ -95,7 +95,7 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	return nil
 }
 
-func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterResponse, error) {
+func (s *Service) Register(ctx context.Context, req RegisterRequest, meta TokenMeta) (RegisterResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	password := req.Password
 	nameTrim := strings.TrimSpace(req.Name)
@@ -103,8 +103,8 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	if email == "" {
 		return RegisterResponse{}, errors.New("email is required")
 	}
-	if len(password) < 8 {
-		return RegisterResponse{}, errors.New("password must be at least 8 characters")
+	if err := ValidatePasswordPolicy(password); err != nil {
+		return RegisterResponse{}, err
 	}
 
 	var namePtr *string
@@ -134,7 +134,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	refreshHash := HashRefreshToken(refreshPlain)
 
 	expiresAt := time.Now().Add(s.refreshTTL)
-	if err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt); err != nil {
+	if _, err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt, meta); err != nil {
 		return RegisterResponse{}, err
 	}
 
@@ -149,7 +149,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	}, nil
 }
 
-func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, error) {
+func (s *Service) Login(ctx context.Context, req LoginRequest, meta TokenMeta) (LoginResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	password := req.Password
 
@@ -183,7 +183,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 	refreshHash := HashRefreshToken(refreshPlain)
 	expiresAt := time.Now().Add(s.refreshTTL)
 
-	if err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt); err != nil {
+	if _, err := s.repo.InsertRefreshToken(ctx, u.ID, refreshHash, expiresAt, meta); err != nil {
 		return LoginResponse{}, err
 	}
 
@@ -198,7 +198,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, e
 	}, nil
 }
 
-func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResponse, error) {
+func (s *Service) Refresh(ctx context.Context, req RefreshRequest, meta TokenMeta) (RefreshResponse, error) {
 	plain := strings.TrimSpace(req.RefreshToken)
 	if plain == "" {
 		return RefreshResponse{}, errors.New("refresh token is required")
@@ -213,9 +213,12 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshRespo
 	newHash := HashRefreshToken(newPlain)
 	newExpires := time.Now().Add(s.refreshTTL)
 
-	userID, ok, err := s.repo.RotateRefreshToken(ctx, oldHash, newHash, newExpires)
+	userID, ok, reused, err := s.repo.RotateRefreshToken(ctx, oldHash, newHash, newExpires, meta)
 	if err != nil {
 		return RefreshResponse{}, err
+	}
+	if reused {
+		return RefreshResponse{}, ErrInvalidRefreshToken
 	}
 	if !ok {
 		return RefreshResponse{}, ErrInvalidRefreshToken
@@ -242,6 +245,14 @@ func (s *Service) Logout(ctx context.Context, req LogoutRequest) error {
 
 	_, _, err := s.repo.ConsumeRefreshToken(ctx, hash)
 	return err
+}
+
+func (s *Service) LogoutAll(ctx context.Context, userID string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return errors.New("user id is required")
+	}
+	return s.repo.RevokeAllRefreshTokensForUser(ctx, userID)
 }
 
 func (s *Service) Me(ctx context.Context, userID string) (UserDTO, error) {

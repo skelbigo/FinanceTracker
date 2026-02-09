@@ -2,7 +2,10 @@ package auth
 
 import (
 	"errors"
+
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
 	"time"
 )
 
@@ -25,6 +28,7 @@ func (m *JWTManager) GenerateAccessToken(userID string) (string, error) {
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		Subject:   userID,
+		ID:        uuid.NewString(),
 		ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
 		IssuedAt:  jwt.NewNumericDate(now),
 	}

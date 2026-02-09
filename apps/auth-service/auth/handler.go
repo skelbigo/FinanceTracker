@@ -2,23 +2,33 @@ package auth
 
 import (
 	"errors"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/httpx"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/identity"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/ratelimit"
-	"log"
-	"net/http"
 )
 
 type Handler struct {
-	svc *Service
-	mw  gin.HandlerFunc
-	rl  *ratelimit.LoginLimiter
+	svc        *Service
+	mw         gin.HandlerFunc
+	rl         *ratelimit.LoginLimiter
+	cookieCfg  *CookieConfig
+	refreshTTL time.Duration
 }
 
-func NewHandler(svc *Service, authMW gin.HandlerFunc, loginLimiter *ratelimit.LoginLimiter) *Handler {
-	return &Handler{svc: svc, mw: authMW, rl: loginLimiter}
+func NewHandler(
+	svc *Service,
+	authMW gin.HandlerFunc,
+	loginLimiter *ratelimit.LoginLimiter,
+	cookieCfg *CookieConfig,
+	refreshTTL time.Duration,
+) *Handler {
+	return &Handler{svc: svc, mw: authMW, rl: loginLimiter, cookieCfg: cookieCfg, refreshTTL: refreshTTL}
 }
 
 func (h *Handler) RegisterRoutes(r gin.IRouter) {
@@ -27,6 +37,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	g.POST("/login", h.login)
 	g.POST("/refresh", h.refresh)
 	g.POST("/logout", h.logout)
+	g.POST("/logout/all", h.mw, h.logoutAll)
 	g.GET("/me", h.mw, h.me)
 }
 
@@ -44,7 +55,7 @@ func (h *Handler) register(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.Register(c.Request.Context(), req)
+	resp, err := h.svc.Register(c.Request.Context(), req, TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrEmailTaken):
@@ -56,6 +67,11 @@ func (h *Handler) register(c *gin.Context) {
 			httpx.Internal(c)
 		}
 		return
+	}
+
+	if h.cookieCfg != nil {
+		setRefreshCookie(c.Writer, *h.cookieCfg, resp.RefreshToken, h.refreshTTL)
+		resp.RefreshToken = ""
 	}
 
 	c.JSON(http.StatusCreated, resp)
@@ -81,7 +97,7 @@ func (h *Handler) login(c *gin.Context) {
 		}
 	}
 
-	resp, err := h.svc.Login(c.Request.Context(), req)
+	resp, err := h.svc.Login(c.Request.Context(), req, TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows), errors.Is(err, ErrInvalidCredentials):
@@ -91,6 +107,11 @@ func (h *Handler) login(c *gin.Context) {
 			httpx.Internal(c)
 		}
 		return
+	}
+
+	if h.cookieCfg != nil {
+		setRefreshCookie(c.Writer, *h.cookieCfg, resp.RefreshToken, h.refreshTTL)
+		resp.RefreshToken = ""
 	}
 
 	c.JSON(http.StatusOK, resp)
@@ -105,8 +126,13 @@ func (h *Handler) refresh(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	if req.RefreshToken == "" && h.cookieCfg != nil {
+		if ck, err := c.Cookie(RefreshTokenCookie); err == nil {
+			req.RefreshToken = ck
+		}
+	}
 
-	resp, err := h.svc.Refresh(c.Request.Context(), req)
+	resp, err := h.svc.Refresh(c.Request.Context(), req, TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows), errors.Is(err, ErrInvalidRefreshToken):
@@ -118,6 +144,11 @@ func (h *Handler) refresh(c *gin.Context) {
 		return
 	}
 
+	if h.cookieCfg != nil {
+		setRefreshCookie(c.Writer, *h.cookieCfg, resp.RefreshToken, h.refreshTTL)
+		resp.RefreshToken = ""
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -126,11 +157,41 @@ func (h *Handler) logout(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	if req.RefreshToken == "" && h.cookieCfg != nil {
+		if ck, err := c.Cookie(RefreshTokenCookie); err == nil {
+			req.RefreshToken = ck
+		}
+	}
 
 	if err := h.svc.Logout(c.Request.Context(), req); err != nil {
 		log.Printf("auth.logout: %v", err)
 		httpx.Internal(c)
 		return
+	}
+
+	if h.cookieCfg != nil {
+		clearRefreshCookie(c.Writer, *h.cookieCfg)
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) logoutAll(c *gin.Context) {
+	v, ok := c.Get(identity.CtxUserIDKey)
+	userID, ok := v.(string)
+	if !ok || userID == "" {
+		httpx.Unauthorized(c, "invalid token")
+		return
+	}
+
+	if err := h.svc.LogoutAll(c.Request.Context(), userID); err != nil {
+		log.Printf("auth.logoutAll: %v", err)
+		httpx.Internal(c)
+		return
+	}
+
+	if h.cookieCfg != nil {
+		clearRefreshCookie(c.Writer, *h.cookieCfg)
 	}
 
 	c.Status(http.StatusNoContent)

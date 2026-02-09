@@ -40,7 +40,7 @@ func RequireAuth(
 			return
 		}
 
-		out, err := authSvc.Refresh(c.Request.Context(), auth.RefreshRequest{RefreshToken: refresh})
+		out, err := authSvc.Refresh(c.Request.Context(), auth.RefreshRequest{RefreshToken: refresh}, auth.TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 		if err != nil {
 			clearAuthCookies(c, cfg)
 			c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")

@@ -40,13 +40,15 @@ RETURNING id::text, email, password_hash, name, created_at
 	return u, nil
 }
 
-func (r *Repo) InsertRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
+func (r *Repo) InsertRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time, meta TokenMeta) (string, error) {
 	const q = `
-INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at)
-VALUES ($1::uuid, $2, $3, NULL)
+INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at, user_agent, ip)
+VALUES ($1::uuid, $2, $3, NULL, $4, NULLIF($5, '')::inet)
+RETURNING id::text
 `
-	_, err := r.db.Exec(ctx, q, userID, tokenHash, expiresAt)
-	return err
+	var id string
+	err := r.db.QueryRow(ctx, q, userID, tokenHash, expiresAt, meta.UserAgent, meta.IP).Scan(&id)
+	return id, err
 }
 
 func (r *Repo) InsertPasswordResetToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
@@ -90,6 +92,17 @@ WHERE email = $1
 		return User{}, err
 	}
 	return u, nil
+}
+
+func (r *Repo) RevokeAllRefreshTokensForUser(ctx context.Context, userID string) error {
+	const q = `
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE user_id = $1::uuid
+AND revoked_at IS NULL
+`
+	_, err := r.db.Exec(ctx, q, userID)
+	return err
 }
 
 func (r *Repo) RevokeExpiredRefreshTokens(ctx context.Context, userID string) error {
@@ -154,39 +167,71 @@ WHERE id = $1::uuid
 	return nil
 }
 
-func (r *Repo) RotateRefreshToken(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (string, bool, error) {
+func (r *Repo) RotateRefreshToken(ctx context.Context, oldHash, newHash string, expiresAt time.Time, meta TokenMeta) (string, bool, bool, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	const consumeQ = `
+	const selectQ = `
+SELECT id::text, user_id::text, revoked_at, expires_at
+FROM refresh_tokens
+WHERE token_hash = $1
+FOR UPDATE
+`
+	var tokenID string
+	var userID string
+	var revokedAt *time.Time
+	var rowExpiresAt time.Time
+	if err := tx.QueryRow(ctx, selectQ, oldHash).Scan(&tokenID, &userID, &revokedAt, &rowExpiresAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, false, nil
+		}
+		return "", false, false, err
+	}
+
+	if !rowExpiresAt.After(time.Now()) {
+		return "", false, false, nil
+	}
+
+	if revokedAt != nil {
+		const revokeAllQ = `
 UPDATE refresh_tokens
 SET revoked_at = NOW()
-WHERE token_hash = $1
+WHERE user_id = $1::uuid
 AND revoked_at IS NULL
-AND expires_at > NOW()
-RETURNING user_id::text
 `
-	var userID string
-	if err := tx.QueryRow(ctx, consumeQ, oldHash).Scan(&userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", false, nil
+		if _, err := tx.Exec(ctx, revokeAllQ, userID); err != nil {
+			return "", false, false, err
 		}
-		return "", false, err
+		if err := tx.Commit(ctx); err != nil {
+			return "", false, false, err
+		}
+		return userID, false, true, nil
 	}
 
 	const insertQ = `
-INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at)
-VALUES ($1::uuid, $2, $3, NULL)
+INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at, user_agent, ip)
+VALUES ($1::uuid, $2, $3, NULL, $4, NULLIF($5, '')::inet)
+RETURNING id::text
 `
-	if _, err := tx.Exec(ctx, insertQ, userID, newHash, expiresAt); err != nil {
-		return "", false, err
+	var newID string
+	if err := tx.QueryRow(ctx, insertQ, userID, newHash, expiresAt, meta.UserAgent, meta.IP).Scan(&newID); err != nil {
+		return "", false, false, err
+	}
+
+	const revokeOldQ = `
+UPDATE refresh_tokens
+SET revoked_at = NOW(), replaced_by_token_id = $2::uuid
+WHERE id = $1::uuid
+`
+	if _, err := tx.Exec(ctx, revokeOldQ, tokenID, newID); err != nil {
+		return "", false, false, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
-	return userID, true, nil
+	return userID, true, false, nil
 }

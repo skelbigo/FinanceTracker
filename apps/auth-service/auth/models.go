@@ -39,7 +39,7 @@ type LoginResponse struct {
 
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type RefreshRequest struct {

@@ -56,6 +56,8 @@ func RegisterRoutes(router *gin.Engine, h *Handlers) {
 	app := webGroup.Group("/app")
 	app.Use(RequireAuth(h.JWTM, h.Auth, h.CookieCfg, h.AccessTTL, h.RefreshTTL))
 
+	app.POST("/logout/all", h.PostLogoutAll)
+
 	app.GET("/workspaces", h.GetWorkspacesPage)
 	app.POST("/workspaces", h.PostCreateWorkspace)
 

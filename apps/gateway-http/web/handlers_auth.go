@@ -113,7 +113,7 @@ func (h *Handlers) PostLogin(c *gin.Context) {
 		Password: c.PostForm("password"),
 	}
 
-	resp, err := h.Auth.Login(c.Request.Context(), req)
+	resp, err := h.Auth.Login(c.Request.Context(), req, auth.TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows), errors.Is(err, auth.ErrInvalidCredentials):
@@ -162,7 +162,7 @@ func (h *Handlers) PostRegister(c *gin.Context) {
 		Password: c.PostForm("password"),
 	}
 
-	resp, err := h.Auth.Register(c.Request.Context(), req)
+	resp, err := h.Auth.Register(c.Request.Context(), req, auth.TokenMeta{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()})
 	if err != nil {
 		flash := "Could not create account"
 		if errors.Is(err, auth.ErrEmailTaken) {
@@ -193,4 +193,22 @@ func (h *Handlers) PostLogout(c *gin.Context) {
 
 	clearAuthCookies(c, h.CookieCfg)
 	c.Redirect(http.StatusSeeOther, "/login?flash=Logged+out")
+}
+
+func (h *Handlers) PostLogoutAll(c *gin.Context) {
+	v, ok := c.Get(auth.CtxUserIDKey)
+	userID, ok := v.(string)
+	if !ok || userID == "" {
+		clearAuthCookies(c, h.CookieCfg)
+		c.Redirect(http.StatusSeeOther, "/login?flash=Please+login")
+		return
+	}
+
+	if err := h.Auth.LogoutAll(c.Request.Context(), userID); err != nil {
+		c.Redirect(http.StatusSeeOther, "/app/workspaces?flash=Could+not+log+out+on+all+devices")
+		return
+	}
+
+	clearAuthCookies(c, h.CookieCfg)
+	c.Redirect(http.StatusSeeOther, "/login?flash=Logged+out+on+all+devices")
 }

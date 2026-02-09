@@ -35,6 +35,10 @@ const (
 
 	defaultBudgetsEnforceExpenseCategories = "true"
 
+	// If enabled, the JSON auth API issues refresh tokens via HttpOnly Secure cookie
+	// (recommended for browser clients) and omits refresh_token from response bodies.
+	defaultAuthRefreshCookie = "true"
+
 	defaultNotificationsGRPCPort = "9090"
 
 	maxPort = 65535
@@ -85,6 +89,7 @@ type Config struct {
 	JWTAccessTTLMinutes int
 	RefreshTTLDays      int
 	BCryptCost          int
+	AuthRefreshCookie   bool
 
 	LoginRateLimitEnabled             bool
 	LoginRateLimitWindowSeconds       int
@@ -215,6 +220,16 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("BCRYPT_COST must be between 10 and 14 (got %d)", cfg.BCryptCost))
 	}
 
+	authRefreshCookieRaw := strings.TrimSpace(os.Getenv("AUTH_REFRESH_COOKIE"))
+	if authRefreshCookieRaw == "" {
+		authRefreshCookieRaw = defaultAuthRefreshCookie
+	}
+	authRefreshCookie, _, authRefreshCookieErr := parseBoolOptional(authRefreshCookieRaw, "AUTH_REFRESH_COOKIE")
+	if authRefreshCookieErr != nil {
+		errs = append(errs, authRefreshCookieErr)
+	}
+	cfg.AuthRefreshCookie = authRefreshCookie
+
 	loginRLEnabledRaw := strings.TrimSpace(os.Getenv("LOGIN_RATE_LIMIT_ENABLED"))
 	if loginRLEnabledRaw == "" {
 		loginRLEnabledRaw = defaultLoginRateLimitEnabled
@@ -291,14 +306,14 @@ func Load() (Config, error) {
 		}
 	}
 
-	if cfg.JWTAccessTTLMinutes <= 0 || cfg.JWTAccessTTLMinutes > 24*60 {
-		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES out of range: %d", cfg.JWTAccessTTLMinutes))
+	if cfg.JWTAccessTTLMinutes < 5 || cfg.JWTAccessTTLMinutes > 15 {
+		errs = append(errs, fmt.Errorf("JWT_ACCESS_TTL_MINUTES must be between 5 and 15 (got %d)", cfg.JWTAccessTTLMinutes))
 	}
 	if cfg.CSRFTTLMinutes <= 0 || cfg.CSRFTTLMinutes > 24*60 {
 		errs = append(errs, fmt.Errorf("CSRF_TTL_MINUTES out of range: %d", cfg.CSRFTTLMinutes))
 	}
-	if cfg.RefreshTTLDays <= 0 || cfg.RefreshTTLDays > 365 {
-		errs = append(errs, fmt.Errorf("JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS out of range: %d", cfg.RefreshTTLDays))
+	if cfg.RefreshTTLDays < 7 || cfg.RefreshTTLDays > 30 {
+		errs = append(errs, fmt.Errorf("JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS must be between 7 and 30 (got %d)", cfg.RefreshTTLDays))
 	}
 	if cfg.LoginRateLimitEnabled {
 		if cfg.LoginRateLimitWindowSeconds < 30 || cfg.LoginRateLimitWindowSeconds > 3600 {

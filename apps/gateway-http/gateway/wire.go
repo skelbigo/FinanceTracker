@@ -41,7 +41,11 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	authRepo := auth.NewRepo(pool)
 	usersAdapter := NewAuthUsersAdapter(authRepo)
 	authSvc := auth.NewService(authRepo, jwtMgr, refreshTTL, resetTTL, returnResetToken, cfg.BCryptCost)
-	authH := auth.NewHandler(authSvc, authMW, loginLimiter)
+	var authCookieCfg *auth.CookieConfig
+	if cfg.AuthRefreshCookie {
+		authCookieCfg = &auth.CookieConfig{Domain: cfg.CookieDomain, Secure: cfg.CookieSecure}
+	}
+	authH := auth.NewHandler(authSvc, authMW, loginLimiter, authCookieCfg, refreshTTL)
 
 	// workspaces
 	wsSvc := workspaces.NewService(wsRepo, usersAdapter)

@@ -17,7 +17,10 @@ func unsetConfigEnv(t *testing.T) {
 		"REDIS_HOST", "REDIS_PORT",
 		"JWT_SECRET",
 		"JWT_ACCESS_TTL_MINUTES",
+		"JWT_REFRESH_TTL_DAYS",
 		"REFRESH_TTL_DAYS",
+		"AUTH_REFRESH_COOKIE",
+		"BCRYPT_COST",
 		"COOKIE_DOMAIN",
 		"COOKIE_SECURE",
 		"CSRF_SECRET",
@@ -122,5 +125,40 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	}
 	if cfg.RefreshTTLDays != 30 {
 		t.Fatalf("expected default RefreshTTLDays=30, got %d", cfg.RefreshTTLDays)
+	}
+}
+
+func TestLoad_InvalidTokenTTLs(t *testing.T) {
+	unsetConfigEnv(t)
+
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_PASSWORD", "postgres")
+	t.Setenv("DB_NAME", "financetracker")
+	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("CSRF_SECRET", "csrf_dev")
+
+	t.Setenv("JWT_ACCESS_TTL_MINUTES", "4")
+	_, err := config.Load()
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "JWT_ACCESS_TTL_MINUTES must be between 5 and 15") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	unsetConfigEnv(t)
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_PASSWORD", "postgres")
+	t.Setenv("DB_NAME", "financetracker")
+	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("CSRF_SECRET", "csrf_dev")
+	t.Setenv("JWT_ACCESS_TTL_MINUTES", "10")
+	t.Setenv("JWT_REFRESH_TTL_DAYS", "6")
+	_, err = config.Load()
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "JWT_REFRESH_TTL_DAYS/REFRESH_TTL_DAYS must be between 7 and 30") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
