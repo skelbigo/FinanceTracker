@@ -3,6 +3,9 @@ package workspaces
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 )
 
 type Service struct {
@@ -24,9 +27,41 @@ func NewService(repo *Repo, users UserDirectory) *Service {
 	return &Service{repo: repo, users: users}
 }
 
+func normalizeWorkspaceName(name string) (string, error) {
+	name = stringsx.TrimStrip(name)
+	if name == "" || utf8.RuneCountInString(name) > 64 {
+		return "", ErrInvalidWorkspaceName
+	}
+	return name, nil
+}
+
+func normalizeCurrencyOptional(currency string) (string, error) {
+	currency = strings.ToUpper(stringsx.TrimStrip(currency))
+	if currency == "" {
+		return "", nil
+	}
+	if len(currency) != 3 {
+		return "", ErrInvalidCurrency
+	}
+	for i := 0; i < 3; i++ {
+		ch := currency[i]
+		if ch < 'A' || ch > 'Z' {
+			return "", ErrInvalidCurrency
+		}
+	}
+	return currency, nil
+}
+
 func (s *Service) CreateWorkspace(ctx context.Context, creatorID, name, currency string) (Workspace, Role, error) {
-	name = strings.TrimSpace(name)
-	currency = strings.TrimSpace(currency)
+	var err error
+	name, err = normalizeWorkspaceName(name)
+	if err != nil {
+		return Workspace{}, "", err
+	}
+	currency, err = normalizeCurrencyOptional(currency)
+	if err != nil {
+		return Workspace{}, "", err
+	}
 
 	w, err := s.repo.CreateWorkspaceWithOwner(ctx, creatorID, name, currency)
 	if err != nil {
@@ -62,7 +97,7 @@ func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]Member
 }
 
 func (s *Service) AddMemberByEmail(ctx context.Context, workspaceID, email string, role Role) error {
-	email = strings.TrimSpace(strings.ToLower(email))
+	email = stringsx.TrimStrip(strings.ToLower(email))
 
 	if role != RoleOwner && role != RoleMember && role != RoleViewer {
 		return ErrInvalidRole

@@ -71,9 +71,16 @@ func (h *Handler) CreateWorkspace(c *gin.Context) {
 		return
 	}
 
-	w, role, err := h.svc.CreateWorkspace(c.Request.Context(), creatorID, strings.TrimSpace(req.Name), strings.TrimSpace(req.DefaultCurrency))
+	w, role, err := h.svc.CreateWorkspace(c.Request.Context(), creatorID, req.Name, req.DefaultCurrency)
 	if err != nil {
-		httpx.Internal(c)
+		switch {
+		case errors.Is(err, ErrInvalidWorkspaceName):
+			httpx.Unprocessable(c, "invalid workspace name", map[string]string{"name": "1..64 chars"})
+		case errors.Is(err, ErrInvalidCurrency):
+			httpx.Unprocessable(c, "invalid currency", map[string]string{"default_currency": "3 uppercase letters (e.g., USD)"})
+		default:
+			httpx.Internal(c)
+		}
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{

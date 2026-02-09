@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 )
 
 type FieldErrors map[string]string
@@ -82,10 +83,11 @@ func NormalizeOptionalNote(s *string) *string {
 	if s == nil {
 		return nil
 	}
-	v := strings.TrimSpace(*s)
+	v := stringsx.TrimStrip(*s)
 	if v == "" {
 		return nil
 	}
+	v = stringsx.FirstNRunes(v, 500)
 	return &v
 }
 
@@ -160,7 +162,7 @@ func isDigits(s string) bool {
 }
 
 func ParseTagsCSV(s string) ([]string, error) {
-	s = strings.TrimSpace(s)
+	s = stringsx.TrimStrip(s)
 	if s == "" {
 		return []string{}, nil
 	}
@@ -169,7 +171,7 @@ func ParseTagsCSV(s string) ([]string, error) {
 	out := make([]string, 0, len(parts))
 	seen := map[string]struct{}{}
 	for _, p := range parts {
-		v := strings.ToLower(strings.TrimSpace(p))
+		v := strings.ToLower(strings.TrimSpace(stringsx.StripControl(p)))
 		if v == "" {
 			continue
 		}
@@ -195,7 +197,7 @@ func NormalizeTagsSlice(tags []string) ([]string, error) {
 	out := make([]string, 0, len(tags))
 	seen := map[string]struct{}{}
 	for _, t := range tags {
-		v := strings.ToLower(strings.TrimSpace(t))
+		v := strings.ToLower(strings.TrimSpace(stringsx.StripControl(t)))
 		if v == "" {
 			continue
 		}

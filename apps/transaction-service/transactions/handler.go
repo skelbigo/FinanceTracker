@@ -8,6 +8,7 @@ import (
 	"github.com/skelbigo/FinanceTracker/apps/gateway-http/workspaces"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/httpx"
 	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/identity"
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 	"log"
 	"net/http"
 	"strconv"
@@ -192,10 +193,16 @@ func (h *Handler) list(c *gin.Context) {
 		f.CategoryID = catID
 	}
 
-	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		f.Search = &v
-	} else if v := strings.TrimSpace(c.Query("search")); v != "" {
-		f.Search = &v
+	if v := c.Query("q"); v != "" {
+		vv := stringsx.TrimStripMaxRunes(v, 128)
+		if vv != "" {
+			f.Search = &vv
+		}
+	} else if v := c.Query("search"); v != "" {
+		vv := stringsx.TrimStripMaxRunes(v, 128)
+		if vv != "" {
+			f.Search = &vv
+		}
 	}
 
 	if v := strings.TrimSpace(c.Query("limit")); v != "" {

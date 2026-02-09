@@ -61,7 +61,7 @@ func (h *Handler) create(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidName):
-			httpx.Unprocessable(c, "invalid category name", map[string]string{"name": "1..60 chars"})
+			httpx.Unprocessable(c, "invalid category name", map[string]string{"name": "1..64 chars"})
 		case errors.Is(err, ErrInvalidType):
 			httpx.Unprocessable(c, "invalid category type", map[string]string{"type": "income|expense"})
 		case errors.Is(err, ErrCategoryExists):
@@ -114,7 +114,7 @@ func (h *Handler) update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidName):
-			httpx.Unprocessable(c, "invalid category name", map[string]string{"name": "1..60 chars"})
+			httpx.Unprocessable(c, "invalid category name", map[string]string{"name": "1..64 chars"})
 		case errors.Is(err, ErrInvalidType):
 			httpx.Unprocessable(c, "invalid category type", map[string]string{"type": "income|expense"})
 		case errors.Is(err, ErrCategoryNotFound):

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 )
 
 type EmailSender interface {
@@ -207,6 +209,11 @@ func shortDate(v any) string {
 }
 
 func renderNotificationEmail(n Notification, publicURL string) (subject string, html string, err error) {
+	safeTitle := stringsx.TrimStripMaxRunes(n.Title, 80)
+	if safeTitle == "" {
+		safeTitle = "Notification"
+	}
+
 	if strings.TrimSpace(publicURL) == "" {
 		publicURL = ""
 	}
@@ -257,11 +264,11 @@ func renderNotificationEmail(n Notification, publicURL string) (subject string, 
 		buttonLabel = "View transactions"
 		buttonURL = strings.TrimRight(publicURL, "/") + "/app/transactions"
 	default:
-		body = template.HTML(fmt.Sprintf("<p>%s</p>", template.HTMLEscapeString(n.Body)))
+		body = template.HTML(fmt.Sprintf("<p>%s</p>", template.HTMLEscapeString(stringsx.TrimStripMaxRunes(n.Body, 500))))
 	}
 
-	subject = n.Title
-	full, err := renderEmail(n.Title, body, buttonLabel, buttonURL)
+	subject = safeTitle
+	full, err := renderEmail(safeTitle, body, buttonLabel, buttonURL)
 	if err != nil {
 		return "", "", err
 	}

@@ -60,6 +60,8 @@ func (h *Handler) register(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrEmailTaken):
 			httpx.BadRequest(c, "email already exists", nil)
+		case errors.Is(err, ErrInvalidName):
+			httpx.BadRequest(c, "invalid name", map[string]string{"name": "max 64 chars"})
 		case errors.Is(err, ErrWeakPassword):
 			httpx.BadRequest(c, err.Error(), nil)
 		default:

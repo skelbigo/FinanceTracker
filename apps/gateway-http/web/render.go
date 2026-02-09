@@ -26,7 +26,7 @@ func (r *Renderer) Render(c *gin.Context, page string, data gin.H) {
 	files := []string{layout, pagePath}
 	files = append(files, partials...)
 
-	tmpl, err := template.ParseFiles(files...)
+	tmpl, err := template.New("layout").Funcs(templateFuncMap()).ParseFiles(files...)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "template parse error: %v", err)
 		return

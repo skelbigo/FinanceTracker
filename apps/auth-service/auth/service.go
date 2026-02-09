@@ -6,6 +6,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 )
 
 type JWT interface {
@@ -98,7 +101,7 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 func (s *Service) Register(ctx context.Context, req RegisterRequest, meta TokenMeta) (RegisterResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	password := req.Password
-	nameTrim := strings.TrimSpace(req.Name)
+	nameTrim := stringsx.TrimStrip(req.Name)
 
 	if email == "" {
 		return RegisterResponse{}, errors.New("email is required")
@@ -109,6 +112,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest, meta TokenM
 
 	var namePtr *string
 	if nameTrim != "" {
+		if utf8.RuneCountInString(nameTrim) > 64 {
+			return RegisterResponse{}, ErrInvalidName
+		}
 		namePtr = &nameTrim
 	}
 

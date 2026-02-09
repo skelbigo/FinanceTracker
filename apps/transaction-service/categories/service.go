@@ -3,6 +3,8 @@ package categories
 import (
 	"context"
 	"strings"
+
+	"github.com/skelbigo/FinanceTracker/packages/shared-kernel/stringsx"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -19,11 +21,11 @@ func validateType(t Type) bool {
 }
 
 func normalizeName(name string) (string, error) {
-	name = strings.TrimSpace(name)
+	name = stringsx.TrimStrip(name)
 	if name == "" {
 		return "", ErrInvalidName
 	}
-	if utf8.RuneCountInString(name) > 60 {
+	if utf8.RuneCountInString(name) > 64 {
 		return "", ErrInvalidName
 	}
 	return name, nil

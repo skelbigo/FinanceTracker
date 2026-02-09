@@ -11,7 +11,7 @@ import (
 func (r *Renderer) RenderPartial(c *gin.Context, tmplName string, data gin.H) {
 	partials, _ := filepath.Glob(filepath.Join(r.templatesDir, "partials", "*.html"))
 
-	tmpl, err := template.ParseFiles(partials...)
+	tmpl, err := template.New("partials").Funcs(templateFuncMap()).ParseFiles(partials...)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "template parse error: %v", err)
 		return
