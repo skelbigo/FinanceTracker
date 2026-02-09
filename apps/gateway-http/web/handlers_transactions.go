@@ -556,10 +556,11 @@ func buildTxListFilter(vm txFiltersVM) (transactions.ListFilter, error) {
 
 	f.Limit = vm.Limit
 	f.Offset = vm.Offset
-	f.Sort = vm.Sort
-	if f.Sort == "" {
-		f.Sort = "occurred_at_desc"
+	sort := vm.Sort
+	if sort == "" || !transactions.IsAllowedSort(sort) {
+		sort = transactions.SortOccurredAtDesc
 	}
+	f.Sort = transactions.NormalizeSort(sort)
 	return f, nil
 }
 

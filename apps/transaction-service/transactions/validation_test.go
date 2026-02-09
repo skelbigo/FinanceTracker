@@ -1,6 +1,7 @@
 package transactions
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -159,22 +160,38 @@ func TestValidateDateRange(t *testing.T) {
 	}
 }
 
-func TestOrderByFromSort(t *testing.T) {
+func TestSortAllowlistAndQuerySelection(t *testing.T) {
 	t.Parallel()
 
-	cases := map[string]string{
-		"":                 "occurred_at DESC",
-		"occurred_at_desc": "occurred_at DESC",
-		"occurred_at_asc":  "occurred_at ASC",
-		"amount_desc":      "amount_minor DESC",
-		"amount_asc":       "amount_minor ASC",
-		"  amount_asc ":    "amount_minor ASC",
-		"DROP TABLE":       "occurred_at DESC",
+	cases := []struct {
+		in       string
+		allowed  bool
+		normal   string
+		orderKey string
+	}{
+		{"", false, "", "occurred_at DESC"},
+		{"occurred_at_desc", true, "occurred_at_desc", "occurred_at DESC"},
+		{"occurred_at_asc", true, "occurred_at_asc", "occurred_at ASC"},
+		{"amount_desc", true, "amount_desc", "amount_minor DESC"},
+		{"amount_asc", true, "amount_asc", "amount_minor ASC"},
+		{"  amount_asc ", true, "amount_asc", "amount_minor ASC"},
+		{"DROP TABLE", false, "drop table", "occurred_at DESC"},
 	}
-	for in, want := range cases {
-		got := orderByFromSort(in)
-		if got != want {
-			t.Fatalf("orderByFromSort(%q)=%q want %q", in, got, want)
+
+	for _, tc := range cases {
+		if IsAllowedSort(tc.in) != tc.allowed {
+			t.Fatalf("IsAllowedSort(%q)=%v want %v", tc.in, IsAllowedSort(tc.in), tc.allowed)
+		}
+
+		if tc.in != "" {
+			if got := NormalizeSort(tc.in); got != tc.normal {
+				t.Fatalf("NormalizeSort(%q)=%q want %q", tc.in, got, tc.normal)
+			}
+		}
+
+		q := listQueryFromSort(tc.in)
+		if !strings.Contains(q, "ORDER BY "+tc.orderKey) {
+			t.Fatalf("listQueryFromSort(%q) did not contain expected ORDER BY %q", tc.in, tc.orderKey)
 		}
 	}
 }

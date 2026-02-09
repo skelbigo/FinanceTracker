@@ -128,19 +128,19 @@ WHERE workspace_id = $1 AND id = $2;
 }
 
 func (r *Repo) List(ctx context.Context, workspaceID uuid.UUID, period *Period) ([]Budget, error) {
-	q := `
+	const q = `
 SELECT id, workspace_id, category_id, period, amount_limit_minor, currency, created_at, updated_at
 FROM budgets
 WHERE workspace_id = $1
+  AND ($2::text IS NULL OR period = $2)
+ORDER BY created_at DESC;
 `
-	args := []any{workspaceID}
+	var periodArg any = nil
 	if period != nil {
-		q += "  AND period = $2\n"
-		args = append(args, *period)
+		periodArg = *period
 	}
-	q += "ORDER BY created_at DESC;\n"
 
-	rows, err := r.db.Query(ctx, q, args...)
+	rows, err := r.db.Query(ctx, q, workspaceID, periodArg)
 	if err != nil {
 		return nil, err
 	}

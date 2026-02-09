@@ -2,7 +2,6 @@ package transactions
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -49,75 +48,126 @@ type ListFilter struct {
 	Sort       string
 }
 
-func orderByFromSort(sort string) string {
-	switch strings.TrimSpace(sort) {
-	case "occurred_at_asc":
-		return "occurred_at ASC"
-	case "amount_desc":
-		return "amount_minor DESC"
-	case "amount_asc":
-		return "amount_minor ASC"
-	case "occurred_at_desc":
-		fallthrough
-	default:
-		return "occurred_at DESC"
-	}
-}
-
-func (r *Repo) List(ctx context.Context, workspaceID string, f ListFilter) ([]Transaction, error) {
-	orderBy := orderByFromSort(f.Sort)
-
-	args := []any{workspaceID}
-	argN := 2
-
-	var sb strings.Builder
-	sb.WriteString(`
+const (
+	listQueryOccurredAtAsc = `
 SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
        created_at, updated_at
 FROM transactions
 WHERE workspace_id = $1::uuid
-`)
+  AND ($2::timestamptz IS NULL OR occurred_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR occurred_at <= $3::timestamptz)
+  AND ($4::text IS NULL OR type = $4::text)
+  AND ($5::uuid IS NULL OR category_id = $5::uuid)
+  AND ($6::text IS NULL OR $6 = '' OR (COALESCE(note, '') ILIKE '%' || $6 || '%' OR $6 = ANY(tags)))
+ORDER BY occurred_at ASC, id ASC
+LIMIT $7 OFFSET $8;
+`
+
+	listQueryOccurredAtDesc = `
+SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
+       created_at, updated_at
+FROM transactions
+WHERE workspace_id = $1::uuid
+  AND ($2::timestamptz IS NULL OR occurred_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR occurred_at <= $3::timestamptz)
+  AND ($4::text IS NULL OR type = $4::text)
+  AND ($5::uuid IS NULL OR category_id = $5::uuid)
+  AND ($6::text IS NULL OR $6 = '' OR (COALESCE(note, '') ILIKE '%' || $6 || '%' OR $6 = ANY(tags)))
+ORDER BY occurred_at DESC, id DESC
+LIMIT $7 OFFSET $8;
+`
+
+	listQueryAmountAsc = `
+SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
+       created_at, updated_at
+FROM transactions
+WHERE workspace_id = $1::uuid
+  AND ($2::timestamptz IS NULL OR occurred_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR occurred_at <= $3::timestamptz)
+  AND ($4::text IS NULL OR type = $4::text)
+  AND ($5::uuid IS NULL OR category_id = $5::uuid)
+  AND ($6::text IS NULL OR $6 = '' OR (COALESCE(note, '') ILIKE '%' || $6 || '%' OR $6 = ANY(tags)))
+ORDER BY amount_minor ASC, id ASC
+LIMIT $7 OFFSET $8;
+`
+
+	listQueryAmountDesc = `
+SELECT id::text, workspace_id::text, user_id::text, category_id::text, type, amount_minor, currency, occurred_at, note, tags,
+       created_at, updated_at
+FROM transactions
+WHERE workspace_id = $1::uuid
+  AND ($2::timestamptz IS NULL OR occurred_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR occurred_at <= $3::timestamptz)
+  AND ($4::text IS NULL OR type = $4::text)
+  AND ($5::uuid IS NULL OR category_id = $5::uuid)
+  AND ($6::text IS NULL OR $6 = '' OR (COALESCE(note, '') ILIKE '%' || $6 || '%' OR $6 = ANY(tags)))
+ORDER BY amount_minor DESC, id DESC
+LIMIT $7 OFFSET $8;
+`
+)
+
+func listQueryFromSort(sort string) string {
+	switch NormalizeSort(sort) {
+	case SortOccurredAtAsc:
+		return listQueryOccurredAtAsc
+	case SortAmountDesc:
+		return listQueryAmountDesc
+	case SortAmountAsc:
+		return listQueryAmountAsc
+	case SortOccurredAtDesc, "":
+		fallthrough
+	default:
+		return listQueryOccurredAtDesc
+	}
+}
+
+func (r *Repo) List(ctx context.Context, workspaceID string, f ListFilter) ([]Transaction, error) {
+	q := listQueryFromSort(f.Sort)
+
+	var fromArg any = nil
 	if f.From != nil {
-		sb.WriteString(fmt.Sprintf("AND occurred_at >= $%d::timestamptz\n", argN))
-		args = append(args, *f.From)
-		argN++
+		fromArg = *f.From
 	}
+	var toArg any = nil
 	if f.To != nil {
-		sb.WriteString(fmt.Sprintf("AND occurred_at <= $%d::timestamptz\n", argN))
-		args = append(args, *f.To)
-		argN++
+		toArg = *f.To
 	}
+	var typeArg any = nil
 	if f.Type != nil {
-		sb.WriteString(fmt.Sprintf("AND type = $%d::text\n", argN))
-		args = append(args, string(*f.Type))
-		argN++
+		typeArg = string(*f.Type)
 	}
+	var categoryArg any = nil
 	if f.CategoryID != nil {
-		sb.WriteString(fmt.Sprintf("AND category_id = $%d::uuid\n", argN))
-		args = append(args, *f.CategoryID)
-		argN++
+		categoryArg = *f.CategoryID
 	}
+	var searchArg any = nil
 	if f.Search != nil {
-		q := strings.TrimSpace(*f.Search)
-		if q != "" {
-			sb.WriteString(fmt.Sprintf("AND (COALESCE(note, '') ILIKE '%%' || $%d || '%%' OR $%d = ANY(tags))\n", argN, argN))
-			args = append(args, q)
-			argN++
+		qq := strings.TrimSpace(*f.Search)
+		if qq != "" {
+			searchArg = qq
 		}
 	}
 
 	if f.Limit <= 0 {
 		f.Limit = 50
 	}
+	if f.Limit > 200 {
+		f.Limit = 200
+	}
 	if f.Offset < 0 {
 		f.Offset = 0
 	}
 
-	sb.WriteString("ORDER BY " + orderBy + "\n")
-	sb.WriteString(fmt.Sprintf("LIMIT $%d OFFSET $%d;\n", argN, argN+1))
-	args = append(args, f.Limit, f.Offset)
-
-	rows, err := r.pool.Query(ctx, sb.String(), args...)
+	rows, err := r.pool.Query(ctx, q,
+		workspaceID,
+		fromArg,
+		toArg,
+		typeArg,
+		categoryArg,
+		searchArg,
+		f.Limit,
+		f.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

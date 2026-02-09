@@ -200,15 +200,15 @@ func (h *Handler) list(c *gin.Context) {
 
 	if v := strings.TrimSpace(c.Query("limit")); v != "" {
 		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			httpx.Unprocessable(c, "invalid limit", map[string]string{"limit": "must be positive int"})
+		if err != nil || n <= 0 || n > 200 {
+			httpx.Unprocessable(c, "invalid limit", map[string]string{"limit": "must be int between 1 and 200"})
 			return
 		}
 		f.Limit = n
 	} else if v := strings.TrimSpace(c.Query("page_size")); v != "" {
 		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			httpx.Unprocessable(c, "invalid page_size", map[string]string{"page_size": "must be positive int"})
+		if err != nil || n <= 0 || n > 200 {
+			httpx.Unprocessable(c, "invalid page_size", map[string]string{"page_size": "must be int between 1 and 200"})
 			return
 		}
 		f.Limit = n
@@ -224,7 +224,11 @@ func (h *Handler) list(c *gin.Context) {
 	}
 
 	if v := strings.TrimSpace(c.Query("sort")); v != "" {
-		f.Sort = v
+		if !IsAllowedSort(v) {
+			httpx.Unprocessable(c, "invalid sort", map[string]string{"sort": "occurred_at_desc|occurred_at_asc|amount_desc|amount_asc"})
+			return
+		}
+		f.Sort = NormalizeSort(v)
 	}
 
 	res, err := h.svc.List(c.Request.Context(), workspaceID, f)

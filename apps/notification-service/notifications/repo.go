@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,21 +74,16 @@ func (r *Repo) ListForUser(ctx context.Context, userID uuid.UUID, onlyUnread boo
 
 	queryLimit := limit + 1
 
-	args := []any{userID, queryLimit, offset}
-	where := "WHERE user_id = $1::uuid"
-	if onlyUnread {
-		where += " AND is_read = false"
-	}
-
-	q := fmt.Sprintf(`
+	const q = `
 SELECT id, user_id, workspace_id, type, title, body, payload, is_read, created_at
 FROM notifications
-%s
+WHERE user_id = $1::uuid
+  AND ($2::bool = false OR is_read = false)
 ORDER BY created_at DESC, id DESC
-LIMIT $2 OFFSET $3;
-`, where)
+LIMIT $3 OFFSET $4;
+`
 
-	rows, err := r.pool.Query(ctx, q, args...)
+	rows, err := r.pool.Query(ctx, q, userID, onlyUnread, queryLimit, offset)
 	if err != nil {
 		return nil, false, err
 	}
