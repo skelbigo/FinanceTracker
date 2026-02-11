@@ -1,4 +1,22 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: financetracker-caddy
+    profiles: ["tls"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -104,3 +122,6 @@ services:
 
 volumes:
   pgdata:
+
+  caddy_data:
+  caddy_config:

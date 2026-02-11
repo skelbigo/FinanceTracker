@@ -36,6 +36,9 @@ type RouterDeps struct {
 	Readiness ReadinessChecker
 	StartedAt time.Time
 
+	TrustProxy     bool
+	TrustedProxies []string
+
 	WorkspaceRBAC workspaces.RoleProvider
 
 	JWTM         *auth.JWTManager
@@ -65,6 +68,14 @@ type RouterDeps struct {
 }
 
 func SetupRouter(r *gin.Engine, deps RouterDeps) *gin.Engine {
+	if deps.TrustProxy {
+		r.ForwardedByClientIP = true
+		r.RemoteIPHeaders = []string{"X-Forwarded-For", "X-Real-IP"}
+		if err := r.SetTrustedProxies(deps.TrustedProxies); err != nil {
+			panic("httpapi: invalid TRUSTED_PROXIES: " + err.Error())
+		}
+	}
+
 	if deps.Readiness == nil {
 		panic("httpapi: router deps not initialized: Readiness is nil")
 	}

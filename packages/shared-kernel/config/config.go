@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/url"
@@ -35,11 +36,16 @@ const (
 
 	defaultBudgetsEnforceExpenseCategories = "true"
 
-	// If enabled, the JSON auth API issues refresh tokens via HttpOnly Secure cookie
-	// (recommended for browser clients) and omits refresh_token from response bodies.
 	defaultAuthRefreshCookie = "true"
 
 	defaultNotificationsGRPCPort = "9090"
+
+	defaultTrustProxy     = "false"
+	defaultTrustedProxies = "127.0.0.1,::1"
+
+	defaultEncryptionEnabled = "false"
+	defaultEncryptionKeyID   = "k1"
+	defaultEncryptionKeys    = ""
 
 	maxPort = 65535
 )
@@ -63,6 +69,9 @@ func (c Config) AnalyticsCacheTTL() time.Duration {
 type Config struct {
 	AppEnv  string
 	AppPort int
+
+	TrustProxy     bool
+	TrustedProxies []string
 
 	CookieDomain string
 	CookieSecure bool
@@ -90,6 +99,11 @@ type Config struct {
 	RefreshTTLDays      int
 	BCryptCost          int
 	AuthRefreshCookie   bool
+
+	EncryptionEnabled bool
+	EncryptionKey     []byte
+	EncryptionKeyID   string
+	EncryptionKeys    map[string][]byte
 
 	LoginRateLimitEnabled             bool
 	LoginRateLimitWindowSeconds       int
@@ -122,6 +136,39 @@ func Load() (Config, error) {
 	validateOneOf("APP_ENV", cfg.AppEnv, []string{"dev", "prod", "test"}, &errs)
 
 	cfg.AppPort = mustInt(getDefault("APP_PORT", defaultAppPort), "APP_PORT", &errs)
+
+	trustProxyRaw := strings.TrimSpace(os.Getenv("TRUST_PROXY"))
+	if trustProxyRaw == "" {
+		trustProxyRaw = defaultTrustProxy
+	}
+	trustProxyVal, _, trustProxyErr := parseBoolOptional(trustProxyRaw, "TRUST_PROXY")
+	if trustProxyErr != nil {
+		errs = append(errs, trustProxyErr)
+	}
+	cfg.TrustProxy = trustProxyVal
+
+	trustedProxiesRaw := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+	if cfg.TrustProxy {
+		if trustedProxiesRaw == "" {
+			trustedProxiesRaw = defaultTrustedProxies
+		}
+		parts := strings.Split(trustedProxiesRaw, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			cfg.TrustedProxies = append(cfg.TrustedProxies, p)
+		}
+		if len(cfg.TrustedProxies) == 0 {
+			errs = append(errs, fmt.Errorf("TRUST_PROXY=true requires TRUSTED_PROXIES (comma-separated IPs/CIDRs)"))
+		}
+	} else {
+		if trustedProxiesRaw != "" {
+			errs = append(errs, fmt.Errorf("TRUSTED_PROXIES is set but TRUST_PROXY is false (either enable TRUST_PROXY or remove TRUSTED_PROXIES)"))
+		}
+		cfg.TrustedProxies = nil
+	}
 
 	cfg.NotificationsGRPCPort = mustInt(getDefault("NOTIFICATIONS_GRPC_PORT", defaultNotificationsGRPCPort), "NOTIFICATIONS_GRPC_PORT", &errs)
 	if cfg.NotificationsGRPCPort <= 0 || cfg.NotificationsGRPCPort > maxPort {
@@ -206,6 +253,66 @@ func Load() (Config, error) {
 	}
 
 	cfg.JWTSecret = mustString("JWT_SECRET", &errs)
+
+	encryptionEnabledRaw := strings.TrimSpace(os.Getenv("ENCRYPTION_ENABLED"))
+	if encryptionEnabledRaw == "" {
+		encryptionEnabledRaw = defaultEncryptionEnabled
+	}
+	encryptionEnabled, _, encryptionEnabledErr := parseBoolOptional(encryptionEnabledRaw, "ENCRYPTION_ENABLED")
+	if encryptionEnabledErr != nil {
+		errs = append(errs, encryptionEnabledErr)
+	}
+	cfg.EncryptionEnabled = encryptionEnabled
+
+	activeKID := strings.TrimSpace(os.Getenv("ENCRYPTION_ACTIVE_KEY_ID"))
+	if activeKID == "" {
+		activeKID = strings.TrimSpace(getDefault("ENCRYPTION_KEY_ID", defaultEncryptionKeyID))
+	}
+	if err := validateEncryptionKID(activeKID); err != nil {
+		errs = append(errs, fmt.Errorf("invalid ENCRYPTION_ACTIVE_KEY_ID/ENCRYPTION_KEY_ID: %w", err))
+	}
+	cfg.EncryptionKeyID = activeKID
+
+	keysRaw := strings.TrimSpace(getDefault("ENCRYPTION_KEYS", defaultEncryptionKeys))
+	keyRaw := strings.TrimSpace(os.Getenv("ENCRYPTION_KEY"))
+
+	if keysRaw != "" {
+		keyring, err := parseEncryptionKeyring(keysRaw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("invalid ENCRYPTION_KEYS: %w", err))
+		} else {
+			cfg.EncryptionKeys = keyring
+			if k, ok := keyring[activeKID]; ok {
+				cfg.EncryptionKey = k
+			} else if cfg.EncryptionEnabled {
+				errs = append(errs, fmt.Errorf("ENCRYPTION_KEYS missing active key id %q", activeKID))
+			}
+		}
+	} else {
+		if cfg.EncryptionEnabled {
+			if keyRaw == "" {
+				errs = append(errs, fmt.Errorf("ENCRYPTION_ENABLED=true requires ENCRYPTION_KEY or ENCRYPTION_KEYS"))
+			} else {
+				keyBytes, keyErr := parseEncryptionKey(keyRaw)
+				if keyErr != nil {
+					errs = append(errs, fmt.Errorf("invalid ENCRYPTION_KEY: %w", keyErr))
+				} else {
+					cfg.EncryptionKey = keyBytes
+					cfg.EncryptionKeys = map[string][]byte{activeKID: keyBytes}
+				}
+			}
+		} else {
+			if keyRaw != "" {
+				keyBytes, keyErr := parseEncryptionKey(keyRaw)
+				if keyErr != nil {
+					errs = append(errs, fmt.Errorf("invalid ENCRYPTION_KEY: %w", keyErr))
+				} else {
+					cfg.EncryptionKey = keyBytes
+					cfg.EncryptionKeys = map[string][]byte{activeKID: keyBytes}
+				}
+			}
+		}
+	}
 
 	cfg.JWTAccessTTLMinutes = mustInt(getDefault("JWT_ACCESS_TTL_MINUTES", defaultJWTAccessTTLMinutes), "JWT_ACCESS_TTL_MINUTES", &errs)
 	refreshRaw := strings.TrimSpace(os.Getenv("JWT_REFRESH_TTL_DAYS"))
@@ -337,6 +444,72 @@ func Load() (Config, error) {
 		return Config{}, errors.Join(errs...)
 	}
 	return cfg, nil
+}
+
+func parseEncryptionKey(raw string) ([]byte, error) {
+	if len(raw) == 32 {
+		return []byte(raw), nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("must be 32 raw bytes or base64 (got len=%d)", len(raw))
+	}
+	if len(decoded) != 32 {
+		return nil, fmt.Errorf("decoded length must be 32 bytes (got %d)", len(decoded))
+	}
+	return decoded, nil
+}
+
+func validateEncryptionKID(kid string) error {
+	if kid == "" {
+		return errors.New("kid must not be empty")
+	}
+	if len(kid) > 32 {
+		return fmt.Errorf("kid too long (%d)", len(kid))
+	}
+	for _, r := range kid {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_' || r == '-':
+		default:
+			return fmt.Errorf("kid contains invalid char %q", r)
+		}
+	}
+	return nil
+}
+
+func parseEncryptionKeyring(raw string) (map[string][]byte, error) {
+	items := strings.Split(raw, ",")
+	out := make(map[string][]byte)
+	for _, it := range items {
+		it = strings.TrimSpace(it)
+		if it == "" {
+			continue
+		}
+		parts := strings.SplitN(it, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid entry %q (expected kid:key)", it)
+		}
+		kid := strings.TrimSpace(parts[0])
+		keyStr := strings.TrimSpace(parts[1])
+		if err := validateEncryptionKID(kid); err != nil {
+			return nil, fmt.Errorf("invalid kid %q: %w", kid, err)
+		}
+		if keyStr == "" {
+			return nil, fmt.Errorf("missing key for kid %q", kid)
+		}
+		kb, err := parseEncryptionKey(keyStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid key for kid %q: %w", kid, err)
+		}
+		out[kid] = kb
+	}
+	if len(out) == 0 {
+		return nil, errors.New("no keys provided")
+	}
+	return out, nil
 }
 
 func mustString(key string, errs *[]error) string {

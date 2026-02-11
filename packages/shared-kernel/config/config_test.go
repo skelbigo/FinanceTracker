@@ -26,6 +26,11 @@ func unsetConfigEnv(t *testing.T) {
 		"CSRF_SECRET",
 		"CSRF_TTL_MINUTES",
 		"ANALYTICS_CACHE_TTL_MINUTES",
+		"ENCRYPTION_ENABLED",
+		"ENCRYPTION_KEY",
+		"ENCRYPTION_KEY_ID",
+		"ENCRYPTION_ACTIVE_KEY_ID",
+		"ENCRYPTION_KEYS",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")

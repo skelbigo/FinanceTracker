@@ -103,9 +103,11 @@ func BuildRouterDeps(cfg config.Config, pool *pgxpool.Pool, startedAt time.Time)
 	aH := analytics.NewHandler(aSvc, wsRepo)
 
 	return RouterDeps{
-		Readiness:     pool,
-		StartedAt:     startedAt,
-		WorkspaceRBAC: wsRepo,
+		Readiness:      pool,
+		StartedAt:      startedAt,
+		TrustProxy:     cfg.TrustProxy,
+		TrustedProxies: cfg.TrustedProxies,
+		WorkspaceRBAC:  wsRepo,
 
 		JWTM:         jwtMgr,
 		AuthSvc:      authSvc,
