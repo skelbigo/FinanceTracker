@@ -252,7 +252,19 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("ANALYTICS_CACHE_TTL_MINUTES out of range: %d", cfg.AnalyticsCacheTTLMinutes))
 	}
 
-	cfg.JWTSecret = mustString("JWT_SECRET", &errs)
+	accessSecret := strings.TrimSpace(os.Getenv("JWT_ACCESS_SECRET"))
+	legacySecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+
+	switch {
+	case accessSecret != "" && legacySecret != "" && accessSecret != legacySecret:
+		errs = append(errs, fmt.Errorf("JWT_ACCESS_SECRET and JWT_SECRET are both set but differ; set only JWT_ACCESS_SECRET (preferred) or make them identical"))
+	case accessSecret != "":
+		cfg.JWTSecret = accessSecret
+	case legacySecret != "":
+		cfg.JWTSecret = legacySecret
+	default:
+		errs = append(errs, fmt.Errorf("missing required env: JWT_ACCESS_SECRET"))
+	}
 
 	encryptionEnabledRaw := strings.TrimSpace(os.Getenv("ENCRYPTION_ENABLED"))
 	if encryptionEnabledRaw == "" {

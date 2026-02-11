@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: financetracker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: financetracker
+  template:
+    metadata:
+      labels:
+        app: financetracker
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/skelbigo/financetracker:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_ENV
+              value: "prod"
+            - name: TRUST_PROXY
+              value: "true"
+            - name: COOKIE_SECURE
+              value: "true"
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "financetracker"
+            - name: DB_NAME
+              value: "financetracker"
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: financetracker-secrets
+                  key: JWT_ACCESS_SECRET
+            - name: CSRF_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: financetracker-secrets
+                  key: CSRF_SECRET
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: financetracker-secrets
+                  key: DB_PASSWORD
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: financetracker-secrets
+                  key: ENCRYPTION_KEY

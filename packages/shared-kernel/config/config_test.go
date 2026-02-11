@@ -15,6 +15,7 @@ func unsetConfigEnv(t *testing.T) {
 		"DB_URL",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE",
 		"REDIS_HOST", "REDIS_PORT",
+		"JWT_ACCESS_SECRET",
 		"JWT_SECRET",
 		"JWT_ACCESS_TTL_MINUTES",
 		"JWT_REFRESH_TTL_DAYS",
@@ -46,7 +47,7 @@ func TestLoad_MissingRequired(t *testing.T) {
 	}
 
 	msg := err.Error()
-	want := []string{"DB_USER", "DB_PASSWORD", "DB_NAME", "JWT_SECRET", "CSRF_SECRET"}
+	want := []string{"DB_USER", "DB_PASSWORD", "DB_NAME", "JWT_ACCESS_SECRET", "CSRF_SECRET"}
 	for _, k := range want {
 		if !strings.Contains(msg, k) {
 			t.Fatalf("expected error to mention %q, got: %s", k, msg)
@@ -66,7 +67,7 @@ func TestLoad_InvalidDBPort(t *testing.T) {
 	t.Setenv("DB_NAME", "financetracker")
 	t.Setenv("DB_SSLMODE", "disable")
 
-	t.Setenv("JWT_SECRET", "dev_secret")
+	t.Setenv("JWT_ACCESS_SECRET", "dev_secret")
 	t.Setenv("CSRF_SECRET", "csrf_dev_secret")
 
 	_, err := config.Load()
@@ -90,7 +91,7 @@ func TestLoad_OK(t *testing.T) {
 	t.Setenv("DB_NAME", "financetracker")
 	t.Setenv("DB_SSLMODE", "disable")
 
-	t.Setenv("JWT_SECRET", "dev_secret")
+	t.Setenv("JWT_ACCESS_SECRET", "dev_secret")
 	t.Setenv("CSRF_SECRET", "csrf_dev_secret")
 
 	cfg, err := config.Load()
@@ -102,13 +103,31 @@ func TestLoad_OK(t *testing.T) {
 	}
 }
 
+func TestLoad_LegacyJWTSecretOK(t *testing.T) {
+	unsetConfigEnv(t)
+
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_PASSWORD", "postgres")
+	t.Setenv("DB_NAME", "financetracker")
+	t.Setenv("JWT_SECRET", "legacy_secret")
+	t.Setenv("CSRF_SECRET", "csrf_dev")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.JWTSecret != "legacy_secret" {
+		t.Fatalf("expected legacy JWT_SECRET to be used, got %q", cfg.JWTSecret)
+	}
+}
+
 func TestLoad_DefaultsApplied(t *testing.T) {
 	unsetConfigEnv(t)
 
 	t.Setenv("DB_USER", "postgres")
 	t.Setenv("DB_PASSWORD", "postgres")
 	t.Setenv("DB_NAME", "financetracker")
-	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("JWT_ACCESS_SECRET", "dev")
 	t.Setenv("CSRF_SECRET", "csrf_dev")
 
 	cfg, err := config.Load()
@@ -139,7 +158,7 @@ func TestLoad_InvalidTokenTTLs(t *testing.T) {
 	t.Setenv("DB_USER", "postgres")
 	t.Setenv("DB_PASSWORD", "postgres")
 	t.Setenv("DB_NAME", "financetracker")
-	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("JWT_ACCESS_SECRET", "dev")
 	t.Setenv("CSRF_SECRET", "csrf_dev")
 
 	t.Setenv("JWT_ACCESS_TTL_MINUTES", "4")
@@ -155,7 +174,7 @@ func TestLoad_InvalidTokenTTLs(t *testing.T) {
 	t.Setenv("DB_USER", "postgres")
 	t.Setenv("DB_PASSWORD", "postgres")
 	t.Setenv("DB_NAME", "financetracker")
-	t.Setenv("JWT_SECRET", "dev")
+	t.Setenv("JWT_ACCESS_SECRET", "dev")
 	t.Setenv("CSRF_SECRET", "csrf_dev")
 	t.Setenv("JWT_ACCESS_TTL_MINUTES", "10")
 	t.Setenv("JWT_REFRESH_TTL_DAYS", "6")
